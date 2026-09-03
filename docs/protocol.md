@@ -58,7 +58,7 @@ authorization: Bearer <access_token>
 |----------|-----------------------|-----------------------|-------------------------------------------------|
 | `Create` | `CreateEntryRequest`  | `CreateEntryResponse` | сохраняет запись; сервер игнорирует `id`, `version`, таймстампы |
 | `Get`    | `GetEntryRequest`     | `GetEntryResponse`    | возвращает запись по `id`                       |
-| `List`   | `ListEntriesRequest`  | `ListEntriesResponse` | все записи пользователя (без фильтров и пагинации) |
+| `List`   | `ListEntriesRequest`  | `ListEntriesResponse` | все записи пользователя (без фильтров и пагинации); гарантированный порядок — по `created_at, id` |
 | `Update` | `UpdateEntryRequest`  | `UpdateEntryResponse` | заменяет содержимое; требует `id` и актуальную `version` (оптимистичная блокировка) |
 | `Delete` | `DeleteEntryRequest`  | `DeleteEntryResponse` | удаляет запись по `id`                          |
 | `Sync`   | `SyncRequest`         | `SyncResponse`        | полный текущий список записей пользователя (сверка состояния нескольких клиентов) |

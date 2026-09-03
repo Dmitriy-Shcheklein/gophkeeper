@@ -97,7 +97,7 @@ make docker-build
 docker network create gophkeeper
 docker run -d --name gophkeeper-db --network gophkeeper \
   -e POSTGRES_USER=gophkeeper -e POSTGRES_PASSWORD=gophkeeper \
-  -e POSTGRES_DB=gophkeeper postgres:16
+  -e POSTGRES_DB=gophkeeper postgres:17
 
 docker run -d --name gophkeeper-server --network gophkeeper -p 50051:50051 \
   -e DATABASE_DSN='postgres://gophkeeper:gophkeeper@gophkeeper-db:5432/gophkeeper?sslmode=disable' \
@@ -115,7 +115,7 @@ docker run -d --name gophkeeper-server --network gophkeeper -p 50051:50051 \
 # 1. Поднять PostgreSQL (например, в Docker)
 docker run -d --name gophkeeper-db -p 5432:5432 \
   -e POSTGRES_USER=gophkeeper -e POSTGRES_PASSWORD=gophkeeper \
-  -e POSTGRES_DB=gophkeeper postgres:16
+  -e POSTGRES_DB=gophkeeper postgres:17
 
 # 2. Собрать и запустить сервер
 make build
@@ -277,3 +277,11 @@ Swagger/OpenAPI не предоставляется: сетевой проток
 - **клиентское шифрование payload отсутствует** (по решению ТЗ): данные
   передаются и хранятся сервером в виде, определённом выше; защита данных
   на сервере — средствами изоляции пользователей и инфраструктуры БД.
+
+## Известные ограничения
+
+- размер одной записи ограничен лимитом gRPC-сообщения в 4 МиБ (умолчание
+  gRPC): binary-запись крупнее ~4 МиБ будет отклонена с ошибкой
+  `ResourceExhausted`;
+- защита от перебора пароля на `Login` не реализована (rate limiting
+  отсутствует): сдерживание подбора — на сетевом уровне (fail2ban, WAF и т.п.).
