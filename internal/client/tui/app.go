@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbletea"
@@ -32,11 +33,15 @@ const (
 // Async operation results delivered to the model by tea.Cmd values.
 type (
 	// entriesLoadedMsg carries the result of an initial or refresh
-	// load of the full entry set.
+	// load of the full entry set. background marks an automatic
+	// periodic sync.
 	entriesLoadedMsg struct {
-		entries []*model.Entry
-		err     error
+		entries    []*model.Entry
+		err        error
+		background bool
 	}
+	// syncTickMsg fires periodically to trigger a background sync.
+	syncTickMsg struct{}
 	// savedMsg carries the result of a create or edit.
 	savedMsg struct {
 		saved *model.Entry
@@ -131,23 +136,50 @@ func newAppModel(auth authClient, entries entryClient) appModel {
 	return m
 }
 
-// Init kicks off the asynchronous initial load of the entry set; on
-// the auth screen there is nothing to load yet.
+// Init kicks off the asynchronous initial load of the entry set and
+// the periodic background auto-sync; on the auth screen there is
+// nothing to load or sync yet.
 func (m appModel) Init() tea.Cmd {
 	if m.topScreen() == screenAuth {
 		return nil
 	}
-	return loadEntriesCmd(m.entries)
+	return tea.Batch(loadEntriesCmd(m.entries), scheduleSync())
 }
+
+// syncInterval is how often the TUI re-fetches the entry set from
+// the server in the background, so changes made from other devices
+// show up without a manual refresh.
+const syncInterval = 30 * time.Second
 
 // loadEntriesCmd fetches the full entry set in the background.
 func loadEntriesCmd(entries entryClient) tea.Cmd {
+	return loadEntriesCmdBg(entries, false)
+}
+
+// loadEntriesBgCmd fetches the entry set as a background auto-sync
+// (the status bar marks the refresh as automatic).
+func loadEntriesBgCmd(entries entryClient) tea.Cmd {
+	return loadEntriesCmdBg(entries, true)
+}
+
+func loadEntriesCmdBg(entries entryClient, background bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		entries, err := entries.Sync(ctx)
-		return entriesLoadedMsg{entries: entries, err: err}
+		return entriesLoadedMsg{entries: entries, err: err, background: background}
 	}
 }
+
+// syncTickCmd schedules the next background auto-sync tick.
+func syncTickCmd() tea.Cmd {
+	return tea.Tick(syncInterval, func(time.Time) tea.Msg {
+		return syncTickMsg{}
+	})
+}
+
+// scheduleSync arms the next auto-sync tick. It is a package variable
+// only so tests can replace the wall-clock timer with an inert stub.
+var scheduleSync = syncTickCmd
 
 // saveCmd creates or updates the entry in the background.
 func saveCmd(entries entryClient, entry *model.Entry, isNew bool) tea.Cmd {
@@ -286,13 +318,36 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case entriesLoadedMsg:
 		m.loading = false
 		if msg.err != nil {
+			if msg.background {
+				// An auto-sync failure is transient (network etc.);
+				// report it but keep the previously loaded set.
+				m.setError(fmt.Errorf("auto-sync: %w", msg.err))
+				return m, scheduleSync()
+			}
 			m.setError(fmt.Errorf("load entries: %w", msg.err))
 			return m, nil
 		}
 		m.all = msg.entries
 		m.applyFilter()
-		m.setStatus("loaded %d entries", len(msg.entries))
+		if msg.background {
+			m.setStatus("auto-synced %d entries", len(msg.entries))
+		} else {
+			m.setStatus("loaded %d entries", len(msg.entries))
+		}
 		return m, nil
+
+	case syncTickMsg:
+		// Periodic background sync: reload the entries (unless a load
+		// is already in flight or the auth screen is up) and re-arm
+		// the next tick.
+		if m.quitting || m.topScreen() == screenAuth {
+			return m, nil
+		}
+		if m.loading {
+			return m, scheduleSync()
+		}
+		m.loading = true
+		return m, tea.Batch(loadEntriesBgCmd(m.entries), scheduleSync())
 
 	case savedMsg:
 		m.loading = false
@@ -323,7 +378,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.stack = nil
 		m.setStatus("logged in")
-		return m, loadEntriesCmd(m.entries)
+		return m, tea.Batch(loadEntriesCmd(m.entries), scheduleSync())
 
 	case deletedMsg:
 		m.loading = false

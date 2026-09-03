@@ -258,23 +258,77 @@ func send(m tea.Model, keys ...string) tea.Model {
 }
 
 // run executes a command and feeds its message back into the model.
+// Batch commands are flattened: every sub-command runs and its
+// message is fed back too.
 func run(m tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	if cmd == nil {
 		return m, nil
 	}
-	return m.Update(cmd())
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m, _ = run(m, c)
+		}
+		return m, nil
+	}
+	return m.Update(msg)
 }
 
 // load performs the asynchronous initial load: it runs the Init
 // command and feeds the result back, after sizing the window.
 func load(t *testing.T, m appModel, _ *fakeEntries) appModel {
 	t.Helper()
+	_ = muteSyncTick(t)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = updated.(appModel)
 	cmd := m.Init()
 	require.NotNil(t, cmd)
+	// Init returns a batch (initial load + the auto-sync tick): run
+	// every command in it.
+	if batch, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range batch {
+			up, _ := run(m, c)
+			m = up.(appModel)
+		}
+		return m
+	}
 	up, _ := run(m, cmd)
 	return up.(appModel)
+}
+
+// mutedTickMsg is an inert stand-in for the real timer tick: the
+// model ignores unknown messages, so feeding it back is a no-op.
+type mutedTickMsg struct{}
+
+// syncTickState guards the muted auto-sync timer: muteSyncTick is
+// idempotent (load calls it again), so all nested mutes share one
+// counter.
+var syncTickState struct {
+	armed    int
+	previous func() tea.Cmd
+	muted    bool
+}
+
+// muteSyncTick replaces the wall-clock auto-sync timer with an inert,
+// counting stub (the real tea.Tick would block the synchronous test
+// helpers). The returned function reports how many times a tick was
+// armed.
+func muteSyncTick(t *testing.T) func() int {
+	t.Helper()
+	if !syncTickState.muted {
+		syncTickState.previous = scheduleSync
+		syncTickState.muted = true
+		scheduleSync = func() tea.Cmd {
+			syncTickState.armed++
+			return func() tea.Msg { return mutedTickMsg{} }
+		}
+		t.Cleanup(func() {
+			scheduleSync = syncTickState.previous
+			syncTickState.muted = false
+			syncTickState.armed = 0
+		})
+	}
+	return func() int { return syncTickState.armed }
 }
 
 // sampleEntries returns two entries (login and card) for the tests.
@@ -323,6 +377,7 @@ func TestInitialLoad(t *testing.T) {
 }
 
 func TestLoadErrorShowsStatus(t *testing.T) {
+	muteSyncTick(t)
 	entries := newFakeEntries()
 	entries.syncErr = errors.New("server unreachable")
 	m := newAppModel(authed(), entries)
@@ -994,4 +1049,116 @@ func TestFormBinaryWithFilePathStreamsUpload(t *testing.T) {
 	require.Equal(t, []byte(payload), stored.Data)
 	require.Equal(t, int64(len(payload)), stored.DataSize)
 	require.Equal(t, int64(4), stored.Version)
+}
+
+func TestSyncTickReloadsEntriesInBackground(t *testing.T) {
+	armed := muteSyncTick(t)
+	entries := newFakeEntries(&model.Entry{
+		ID: "e1", Type: model.EntryTypeText, Label: "note", Data: []byte("x"), Version: 1,
+	})
+	m := load(t, newAppModel(authed(), entries), entries)
+	syncedAfterLoad := entries.synced
+
+	// The tick triggers a background reload plus the next tick.
+	updated, cmd := m.Update(syncTickMsg{})
+	m = updated.(appModel)
+	require.NotNil(t, cmd)
+	require.True(t, m.loading)
+	require.Equal(t, 2, armed(), "handling the tick re-arms it")
+
+	// Running the batch performs the background sync.
+	up, _ := run(m, cmd)
+	m = up.(appModel)
+	require.False(t, m.loading)
+	require.Equal(t, syncedAfterLoad+1, entries.synced)
+	require.Contains(t, m.status, "auto-synced")
+
+	// The loaded message is marked as background.
+	updated, cmd = m.Update(syncTickMsg{})
+	m = updated.(appModel)
+	msg := msgFromCmd(t, cmd)
+	require.True(t, msg.background)
+	require.NoError(t, msg.err)
+}
+
+// msgFromCmd extracts the first entriesLoadedMsg produced by cmd (the
+// batch may carry the tick and the sync in any order).
+func msgFromCmd(t *testing.T, cmd tea.Cmd) entriesLoadedMsg {
+	t.Helper()
+	for i := 0; i < 3; i++ {
+		msg := cmd()
+		if loaded, ok := msg.(entriesLoadedMsg); ok {
+			return loaded
+		}
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				if loaded, ok := c().(entriesLoadedMsg); ok {
+					return loaded
+				}
+			}
+			t.Fatalf("no entriesLoadedMsg inside batch of %d commands", len(batch))
+		}
+	}
+	t.Fatal("no entriesLoadedMsg in cmd output")
+	return entriesLoadedMsg{}
+}
+
+func TestSyncTickSkipsWhileLoading(t *testing.T) {
+	armed := muteSyncTick(t)
+	entries := newFakeEntries()
+	m := load(t, newAppModel(authed(), entries), entries)
+	m.loading = true
+
+	updated, cmd := m.Update(syncTickMsg{})
+	m = updated.(appModel)
+	// No reload started, but the tick is re-armed.
+	require.Equal(t, 1, entries.synced)
+	require.NotNil(t, cmd)
+	require.Equal(t, 2, armed())
+}
+
+func TestSyncTickIdleOnAuthScreen(t *testing.T) {
+	m := newAppModel(&fakeAuth{}, newFakeEntries())
+	require.Equal(t, screenAuth, m.topScreen())
+
+	updated, cmd := m.Update(syncTickMsg{})
+	_ = updated.(appModel)
+	require.Nil(t, cmd, "no sync and no re-arm on the auth screen")
+}
+
+func TestBackgroundSyncFailureKeepsEntriesAndReArms(t *testing.T) {
+	armed := muteSyncTick(t)
+	entries := newFakeEntries(&model.Entry{
+		ID: "e1", Type: model.EntryTypeText, Label: "note", Data: []byte("x"), Version: 1,
+	})
+	m := load(t, newAppModel(authed(), entries), entries)
+	entries.syncErr = errors.New("server unreachable")
+
+	updated, cmd := m.Update(syncTickMsg{})
+	m = updated.(appModel)
+	up, _ := run(m, cmd)
+	m = up.(appModel)
+
+	// The old set is kept, the error is reported as auto-sync failure
+	// and the tick is re-armed for a retry.
+	require.Len(t, m.all, 1)
+	require.True(t, m.statusErr)
+	require.Contains(t, m.status, "auto-sync")
+	require.Equal(t, 3, armed(), "a failed auto-sync re-arms the tick for a retry")
+}
+
+func TestAuthedRestartsAutoSync(t *testing.T) {
+	muteSyncTick(t)
+	entries := newFakeEntries()
+	m := newAppModel(authed(), entries)
+	// Simulate being on the auth screen and logging in successfully.
+	m.auth = newAuthModel()
+	m.pushScreen(screenAuth)
+	m.stack = nil
+
+	armed := muteSyncTick(t)
+	updated, cmd := m.Update(authedMsg{})
+	m = updated.(appModel)
+	require.NotNil(t, cmd, "login must arm the initial load and the sync tick")
+	require.Equal(t, 1, armed())
 }
