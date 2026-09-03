@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,6 +49,27 @@ func TestGenerateVerifyRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", claims.UserID)
 	assert.Equal(t, "alice", claims.Login)
+}
+
+func TestGenerateTokenPayloadUsesSnakeCaseKeys(t *testing.T) {
+	mgr, err := New("test-secret", time.Minute)
+	require.NoError(t, err)
+
+	token, err := mgr.Generate("user-1", "alice")
+	require.NoError(t, err)
+
+	// Parse the payload without verification and check the JSON keys.
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(payload, &raw))
+	assert.Equal(t, "user-1", raw["user_id"])
+	assert.Equal(t, "alice", raw["login"])
+	assert.NotContains(t, raw, "UserID")
+	assert.NotContains(t, raw, "Login")
 }
 
 func TestVerifyExpired(t *testing.T) {
@@ -99,6 +123,25 @@ func TestVerifyWrongSigningMethod(t *testing.T) {
 		"iat":     time.Now().Unix(),
 	}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodNone, claims).SignedString(jwt.UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
+
+	_, err = mgr.Verify(token)
+	assert.Error(t, err)
+}
+
+func TestVerifyHS512Rejected(t *testing.T) {
+	mgr, err := New("test-secret", time.Minute)
+	require.NoError(t, err)
+
+	// Craft a token signed with HS512 and the correct secret: it must
+	// still be rejected, as only HS256 is accepted.
+	claims := jwt.MapClaims{
+		"user_id": "user-1",
+		"login":   "alice",
+		"exp":     time.Now().Add(time.Minute).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS512, claims).SignedString([]byte("test-secret"))
 	require.NoError(t, err)
 
 	_, err = mgr.Verify(token)

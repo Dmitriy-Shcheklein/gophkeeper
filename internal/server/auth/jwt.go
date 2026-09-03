@@ -14,9 +14,9 @@ import (
 // Claims are the custom JWT claims issued by JWTManager.
 type Claims struct {
 	// UserID is the unique identifier of the authenticated user.
-	UserID string
+	UserID string `json:"user_id"`
 	// Login is the login of the authenticated user.
-	Login string
+	Login string `json:"login"`
 	// RegisteredClaims embed the standard JWT claims (exp, iat, ...).
 	jwt.RegisteredClaims
 }
@@ -59,12 +59,17 @@ func (m *JWTManager) Generate(userID, login string) (string, error) {
 	return signed, nil
 }
 
-// Verify parses and validates a token signed with HS256. It rejects
-// tokens signed with any other algorithm to prevent algorithm confusion
-// attacks, and returns the verified claims on success.
+// signingMethodHS256 is the only JWT signing algorithm accepted by
+// JWTManager.Verify, pinned to prevent algorithm confusion attacks.
+var signingMethodHS256 = jwt.SigningMethodHS256
+
+// Verify parses and validates a token signed with HS256. Tokens signed
+// with any other algorithm (including other HMAC variants such as
+// HS512) are rejected to prevent algorithm confusion attacks, and the
+// verified claims are returned on success.
 func (m *JWTManager) Verify(token string) (*Claims, error) {
 	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if t.Method != signingMethodHS256 {
 			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
 		}
 		return m.secret, nil
