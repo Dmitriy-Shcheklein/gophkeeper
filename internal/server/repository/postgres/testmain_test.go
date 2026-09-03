@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -113,8 +113,16 @@ func migrateUp(dsn string) error {
 	if err != nil {
 		return fmt.Errorf("open migrations: %w", err)
 	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return fmt.Errorf("parse test database DSN: %w", err)
+	}
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return fmt.Errorf("unsupported test database DSN scheme %q", u.Scheme)
+	}
 	// golang-migrate's pgx/v5 driver is registered under the pgx5 scheme.
-	migrations, err := migrate.NewWithSourceInstance("iofs", source, "pgx5"+strings.TrimPrefix(dsn, "postgres"))
+	u.Scheme = "pgx5"
+	migrations, err := migrate.NewWithSourceInstance("iofs", source, u.String())
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}
