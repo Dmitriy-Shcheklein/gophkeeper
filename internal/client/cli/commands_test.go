@@ -170,6 +170,17 @@ func TestAddCommandTextFromStdin(t *testing.T) {
 	require.Equal(t, []byte("note body\n"), entries.added[0].Data)
 }
 
+func TestAddCommandTextFromEmptyStdin(t *testing.T) {
+	entries := newFakeEntries()
+	app, _, errOut := newTestApp(&fakeAuth{token: "x"}, entries)
+	app.In = strings.NewReader("")
+
+	_, _, err := run(t, app, "add", "--type=text", "--label=note", "--text=-")
+	require.Error(t, err)
+	require.Contains(t, errOut.String(), "text entry data must not be empty")
+	require.Empty(t, entries.added)
+}
+
 func TestAddCommandBinaryFile(t *testing.T) {
 	entries := newFakeEntries()
 	app, _, _ := newTestApp(&fakeAuth{token: "x"}, entries)
@@ -178,6 +189,17 @@ func TestAddCommandBinaryFile(t *testing.T) {
 	_, _, err := run(t, app, "add", "--type=binary", "--label=blob", "--file="+path)
 	require.NoError(t, err)
 	require.Equal(t, []byte("binary-content"), entries.added[0].Data)
+}
+
+func TestAddCommandBinaryEmptyFile(t *testing.T) {
+	entries := newFakeEntries()
+	app, _, errOut := newTestApp(&fakeAuth{token: "x"}, entries)
+	path := writeFile(t, "empty.bin", "")
+
+	_, _, err := run(t, app, "add", "--type=binary", "--label=blob", "--file="+path)
+	require.Error(t, err)
+	require.Contains(t, errOut.String(), "binary entry data must not be empty")
+	require.Empty(t, entries.added)
 }
 
 func TestAddCommandBinaryMissingFile(t *testing.T) {

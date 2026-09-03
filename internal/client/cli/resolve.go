@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -13,6 +14,9 @@ import (
 // full id of an entry that does not exist) is passed through so the
 // server reports the not-found error.
 func (a *App) resolveEntryID(ctx context.Context, id string) (string, error) {
+	if id == "" {
+		return "", errors.New("entry id must not be empty")
+	}
 	entries, err := a.entries.List(ctx)
 	if err != nil {
 		return "", err

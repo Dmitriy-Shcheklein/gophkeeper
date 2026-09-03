@@ -24,8 +24,6 @@ func editApp(stdin string) *App {
 	return &App{In: strings.NewReader(stdin), Out: &strings.Builder{}, Err: &strings.Builder{}}
 }
 
-func strp(s string) *string { return &s }
-
 func providedOpts(values map[string]string) *editOptions {
 	opts := &editOptions{provided: make(map[string]bool)}
 	for name, value := range values {

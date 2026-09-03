@@ -121,6 +121,9 @@ func buildAddData(app *App, entryType model.EntryType, opts *addOptions) ([]byte
 		if err != nil {
 			return nil, err
 		}
+		if text == "" {
+			return nil, errors.New("text entry data must not be empty")
+		}
 		return []byte(text), nil
 	case model.EntryTypeBinary:
 		if err := rejectForeignFlags(opts, "text", "username", "password", "number", "holder", "expiry", "cvv"); err != nil {
@@ -129,7 +132,14 @@ func buildAddData(app *App, entryType model.EntryType, opts *addOptions) ([]byte
 		if opts.file == "" {
 			return nil, errors.New("type binary requires --file=<path>")
 		}
-		return os.ReadFile(opts.file)
+		data, err := os.ReadFile(opts.file)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return nil, errors.New("binary entry data must not be empty")
+		}
+		return data, nil
 	case model.EntryTypeCard:
 		if err := rejectForeignFlags(opts, "file", "text", "username", "password"); err != nil {
 			return nil, err

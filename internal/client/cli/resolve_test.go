@@ -18,6 +18,14 @@ func seededEntries() *fakeEntries {
 	)
 }
 
+func TestResolveEntryIDEmpty(t *testing.T) {
+	app, _, _ := newTestApp(&fakeAuth{token: "x"}, seededEntries())
+
+	_, err := app.resolveEntryID(t.Context(), "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "entry id must not be empty")
+}
+
 func TestResolveEntryIDExactMatch(t *testing.T) {
 	app, _, _ := newTestApp(&fakeAuth{token: "x"}, seededEntries())
 

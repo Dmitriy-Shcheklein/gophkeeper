@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"path/filepath"
 	"testing"
 
@@ -59,5 +58,10 @@ func TestResolveDefaultTokenPathError(t *testing.T) {
 
 	_, err := Resolve("", "")
 	require.Error(t, err)
-	require.True(t, errors.Is(err, err), "expected home dir error, got: %v", err)
+	// The chain is config wrap -> token wrap -> the os.UserHomeDir
+	// failure ("$HOME is not defined"); assert the actual cause is
+	// preserved through both layers.
+	require.ErrorContains(t, err, "home directory")
+	require.ErrorContains(t, err, "not defined")
+	require.Contains(t, err.Error(), "default token path")
 }
