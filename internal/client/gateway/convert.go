@@ -31,9 +31,10 @@ var (
 
 // translateError maps a gRPC error to a client-friendly error:
 // server-meaningful codes become the sentinel errors above, any other
-// status error is wrapped together with its code and message (the
-// server sends client-actionable validation messages, e.g. the name
-// of the offending field), and non-status errors are wrapped as-is.
+// status error is wrapped preserving its chain (callers can
+// errors.As the *status.Status; the wrapped message keeps the code
+// and the client-actionable server message, e.g. the name of the
+// offending field), and non-status errors are wrapped as-is.
 func translateError(err error) error {
 	if err == nil {
 		return nil
@@ -52,7 +53,9 @@ func translateError(err error) error {
 	case codes.Unauthenticated:
 		return ErrUnauthenticated
 	default:
-		return fmt.Errorf("gateway: %s: %s", st.Code(), st.Message())
+		// Wrap the original error (not just code+message) so callers
+		// can errors.As the *status.Status out of the chain.
+		return fmt.Errorf("gateway: %w", err)
 	}
 }
 

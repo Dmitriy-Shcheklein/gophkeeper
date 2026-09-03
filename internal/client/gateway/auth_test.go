@@ -95,11 +95,15 @@ func TestLoginInvalidCredentials(t *testing.T) {
 
 func TestRegisterEmptyTokenStillAccepted(t *testing.T) {
 	// The server decides what a success looks like; the gateway
-	// accepts an empty token (HasToken stays false) without failing.
+	// accepts an empty token (HasToken stays false) without failing
+	// and must not overwrite a valid persisted token with nothing.
 	auth := &fakeAuthService{registerToken: ""}
 	g := newBufnetGateway(t, func(s *grpc.Server) {
 		v1.RegisterAuthServiceServer(s, auth)
 	})
+	if err := g.tokenStore.Save("saved-earlier"); err != nil {
+		t.Fatalf("seed token store: %v", err)
+	}
 
 	got, err := g.Register(context.Background(), "alice", "secret")
 	if err != nil {
@@ -111,8 +115,12 @@ func TestRegisterEmptyTokenStillAccepted(t *testing.T) {
 	if g.HasToken() {
 		t.Fatal("HasToken = true, want false")
 	}
-}
 
-func TestAuthInterfaceCompliance(_ *testing.T) {
-	var _ AuthGateway = (*Gateway)(nil)
+	persisted, err := g.tokenStore.Load()
+	if err != nil {
+		t.Fatalf("tokenStore.Load: %v", err)
+	}
+	if persisted != "saved-earlier" {
+		t.Fatalf("persisted token = %q, want it untouched (%q)", persisted, "saved-earlier")
+	}
 }

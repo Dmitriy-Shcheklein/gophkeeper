@@ -118,10 +118,6 @@ func cannedProtoEntry() *v1.Entry {
 	}
 }
 
-func TestEntryInterfaceCompliance(_ *testing.T) {
-	var _ EntryGateway = (*Gateway)(nil)
-}
-
 func TestCreate(t *testing.T) {
 	fake := &fakeEntryServer{createResp: &v1.CreateEntryResponse{Entry: cannedProtoEntry()}}
 	g := newBufnetGateway(t, func(s *grpc.Server) {

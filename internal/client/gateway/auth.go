@@ -54,9 +54,14 @@ func (g *Gateway) Login(ctx context.Context, login, password string) (string, er
 }
 
 // acceptToken stores the token in memory and persists it, returning
-// it to the caller.
+// it to the caller. An empty token (a misbehaving server) is not
+// persisted: overwriting a possibly valid saved token with nothing
+// would log the user out of the next invocation.
 func (g *Gateway) acceptToken(token string) (string, error) {
 	g.SetToken(token)
+	if token == "" {
+		return token, nil
+	}
 	if err := g.tokenStore.Save(token); err != nil {
 		return "", fmt.Errorf("gateway: persist token: %w", err)
 	}

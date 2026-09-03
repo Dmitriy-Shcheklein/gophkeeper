@@ -256,13 +256,13 @@ var errorTranslationTests = []struct {
 		name:    "invalid argument wrapped with server message",
 		code:    codes.InvalidArgument,
 		want:    nil,
-		wantMsg: "gateway: InvalidArgument: label must not be empty",
+		wantMsg: "gateway: rpc error: code = InvalidArgument desc = label must not be empty",
 	},
 	{
 		name:    "unavailable wrapped with code and message",
 		code:    codes.Unavailable,
 		want:    nil,
-		wantMsg: "gateway: Unavailable: connection refused",
+		wantMsg: "gateway: rpc error: code = Unavailable desc = connection refused",
 	},
 }
 
@@ -306,6 +306,26 @@ func TestTranslateNonStatusError(t *testing.T) {
 func TestTranslateNilError(t *testing.T) {
 	if err := translateError(nil); err != nil {
 		t.Fatalf("translateError(nil) = %v, want nil", err)
+	}
+}
+
+func TestTranslateStatusErrorChainPreserved(t *testing.T) {
+	orig := status.Error(codes.InvalidArgument, "label must not be empty")
+	err := translateError(orig)
+
+	// In modern grpc the status error is an internal type exposing
+	// the *status.Status via GRPCStatus(); errors.As must find it
+	// through the chain.
+	var gs interface{ GRPCStatus() *status.Status }
+	if !errors.As(err, &gs) {
+		t.Fatalf("errors.As(GRPCStatus) failed on %v", err)
+	}
+	st := gs.GRPCStatus()
+	if st.Code() != codes.InvalidArgument {
+		t.Fatalf("extracted code = %v, want InvalidArgument", st.Code())
+	}
+	if st.Message() != "label must not be empty" {
+		t.Fatalf("extracted message = %q, want %q", st.Message(), "label must not be empty")
 	}
 }
 

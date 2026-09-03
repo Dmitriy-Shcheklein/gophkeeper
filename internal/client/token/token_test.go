@@ -144,3 +144,87 @@ func TestNewDefaultPath(t *testing.T) {
 		t.Fatalf("New(\"\").Path() = %q, want %q", store.Path(), want)
 	}
 }
+
+func TestDefaultPathWithoutHome(t *testing.T) {
+	t.Setenv("HOME", "")
+
+	if _, err := DefaultPath(); err == nil {
+		t.Fatal("DefaultPath without HOME returned nil error, want error")
+	}
+	if _, err := New(""); err == nil {
+		t.Fatal("New(\"\") without HOME returned nil error, want error")
+	}
+}
+
+func TestWriteTempWriteError(t *testing.T) {
+	// A closed file makes WriteString fail immediately, exercising
+	// the write-error branch of writeTemp.
+	f, err := os.CreateTemp(t.TempDir(), "closed")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	store, err := New(filepath.Join(t.TempDir(), "token"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := store.writeTemp(f, "jwt"); err == nil {
+		t.Fatal("writeTemp on closed file returned nil error, want error")
+	}
+}
+
+func TestStoreLoadOnDirectory(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Loading a path that is a directory must fail with a read error
+	// (not ErrNoToken, which is reserved for a missing file).
+	if _, err := store.Load(); err == nil || errors.Is(err, ErrNoToken) {
+		t.Fatalf("Load on directory error = %v, want a non-ErrNoToken read error", err)
+	}
+}
+
+func TestStoreClearOnDirectory(t *testing.T) {
+	dir := t.TempDir()
+	// A non-empty directory cannot be removed; make sure Clear
+	// reports the removal failure instead of pretending the token is
+	// gone.
+	if err := os.WriteFile(filepath.Join(dir, "keep"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	store, err := New(dir)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := store.Clear(); err == nil {
+		t.Fatal("Clear on non-empty directory returned nil error, want error")
+	}
+}
+
+func TestStoreSaveBlockedParentFile(t *testing.T) {
+	// Plant a regular file where Save needs a directory: both the
+	// MkdirAll and the temp file creation fail.
+	base := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(base, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	store, err := New(filepath.Join(base, "token"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := store.Save("jwt"); err == nil {
+		t.Fatal("Save with blocked parent returned nil error, want error")
+	}
+	// Nothing was written: loading fails with a path error distinct
+	// from the missing-file sentinel.
+	if _, err := store.Load(); err == nil || errors.Is(err, ErrNoToken) {
+		t.Fatalf("Load after failed Save error = %v, want a non-ErrNoToken error", err)
+	}
+}
