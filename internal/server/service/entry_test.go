@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,6 +19,8 @@ import (
 // mirroring the semantics of the postgres implementation.
 type mockEntryRepo struct {
 	entries map[string]*model.Entry
+	// nextID is incremented on every Create to generate unique IDs.
+	nextID int64
 	// createErr, if set, is returned by Create.
 	createErr error
 	// listErr, if set, is returned by List.
@@ -37,7 +41,8 @@ func (m *mockEntryRepo) Create(_ context.Context, entry *model.Entry) error {
 	if m.createErr != nil {
 		return m.createErr
 	}
-	entry.ID = "generated-" + entry.Label
+	id := atomic.AddInt64(&m.nextID, 1)
+	entry.ID = fmt.Sprintf("e%d", id)
 	entry.Version = 1
 	entry.CreatedAt = time.Now()
 	entry.UpdatedAt = entry.CreatedAt
@@ -122,8 +127,11 @@ func TestEntryCreateSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// The entry passed to the repo must keep its payload fields.
-	stored := repo.entries["generated-github"]
-	require.NotNil(t, stored)
+	require.Len(t, repo.entries, 1)
+	var stored *model.Entry
+	for _, e := range repo.entries {
+		stored = e
+	}
 	assert.Equal(t, "user-1", stored.UserID)
 	assert.Equal(t, model.EntryTypeLoginPassword, stored.Type)
 	assert.Equal(t, "github", stored.Label)
@@ -132,7 +140,7 @@ func TestEntryCreateSuccess(t *testing.T) {
 
 	// The returned entry is filled by the repo.
 	assert.Same(t, entry, got)
-	assert.Equal(t, "generated-github", got.ID)
+	assert.Equal(t, stored.ID, got.ID)
 	assert.Equal(t, int64(1), got.Version)
 	assert.False(t, got.CreatedAt.IsZero())
 	assert.False(t, got.UpdatedAt.IsZero())
@@ -151,7 +159,9 @@ func TestEntryCreateForcesUserID(t *testing.T) {
 	}
 	_, err := svc.Create(context.Background(), "user-1", entry)
 	require.NoError(t, err)
-	assert.Equal(t, "user-1", repo.entries["generated-note"].UserID)
+	stored, ok := repo.entries[entry.ID]
+	require.True(t, ok)
+	assert.Equal(t, "user-1", stored.UserID)
 }
 
 func TestEntryCreateValidation(t *testing.T) {
@@ -229,6 +239,27 @@ func TestEntryCreateValidation(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestEntryUpdateAcceptedAtBoundary(t *testing.T) {
+	svc, repo := newTestEntryService()
+	repo.entries["e1"] = &model.Entry{
+		ID: "e1", UserID: "user-1", Type: model.EntryTypeText,
+		Label: "old", Data: []byte("old"), Version: 1,
+	}
+
+	updated, err := svc.Update(context.Background(), "user-1", &model.Entry{
+		ID:       "e1",
+		UserID:   "user-1",
+		Type:     model.EntryTypeText,
+		Label:    strings.Repeat("a", 255),
+		Metadata: strings.Repeat("m", 10000),
+		Data:     []byte("new"),
+		Version:  1,
+	})
+	require.NoError(t, err)
+	assert.Len(t, updated.Label, 255)
+	assert.Len(t, updated.Metadata, 10000)
+}
+
 func TestEntryCreateAllTypesRequireData(t *testing.T) {
 	for _, entryType := range []model.EntryType{
 		model.EntryTypeLoginPassword, model.EntryTypeText,
@@ -274,6 +305,13 @@ func TestEntryGetEmptyUserID(t *testing.T) {
 
 	_, err := svc.Get(context.Background(), "", "e1")
 	assert.ErrorIs(t, err, ErrEmptyUserID)
+}
+
+func TestEntryGetEmptyEntryID(t *testing.T) {
+	svc, _ := newTestEntryService()
+
+	_, err := svc.Get(context.Background(), "user-1", "")
+	assert.ErrorIs(t, err, ErrEmptyEntryID)
 }
 
 func TestEntryList(t *testing.T) {
@@ -441,6 +479,13 @@ func TestEntryDeleteEmptyUserID(t *testing.T) {
 
 	err := svc.Delete(context.Background(), "", "e1")
 	assert.ErrorIs(t, err, ErrEmptyUserID)
+}
+
+func TestEntryDeleteEmptyEntryID(t *testing.T) {
+	svc, _ := newTestEntryService()
+
+	err := svc.Delete(context.Background(), "user-1", "")
+	assert.ErrorIs(t, err, ErrEmptyEntryID)
 }
 
 func TestEntrySyncReturnsFullList(t *testing.T) {

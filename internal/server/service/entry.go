@@ -15,8 +15,8 @@ var (
 	// Normally impossible: the transport layer fills it from the
 	// authenticated identity, the check is purely defensive.
 	ErrEmptyUserID = errors.New("user id must not be empty")
-	// ErrEmptyEntryID is returned when updating an entry without an
-	// identifier.
+	// ErrEmptyEntryID is returned by Get, Update and Delete when the
+	// entry identifier is empty.
 	ErrEmptyEntryID = errors.New("entry id must not be empty")
 	// ErrInvalidEntryType is returned when the entry type is not one of
 	// the supported model.EntryType values.
@@ -101,6 +101,9 @@ func (s *EntryService) Get(ctx context.Context, userID, entryID string) (*model.
 	if err := validateUserID(userID); err != nil {
 		return nil, err
 	}
+	if entryID == "" {
+		return nil, ErrEmptyEntryID
+	}
 
 	entry, err := s.entries.GetByID(ctx, userID, entryID)
 	if err != nil {
@@ -165,6 +168,9 @@ func (s *EntryService) Update(ctx context.Context, userID string, entry *model.E
 func (s *EntryService) Delete(ctx context.Context, userID, entryID string) error {
 	if err := validateUserID(userID); err != nil {
 		return err
+	}
+	if entryID == "" {
+		return ErrEmptyEntryID
 	}
 
 	if err := s.entries.Delete(ctx, userID, entryID); err != nil {
