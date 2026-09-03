@@ -138,6 +138,29 @@ make build
 ./bin/gophkeeper-client --help
 ```
 
+### Дистрибутивы клиента для разных платформ
+
+Кросс-сборка клиента под Windows, Linux и macOS (amd64 и arm64) — по требованию ТЗ
+клиент распространяется в виде CLI-приложения для этих платформ:
+
+```bash
+make build-client-all
+```
+
+Результат — статические бинарники в `bin/` (CGO отключён, внешних зависимостей нет):
+
+```
+bin/gophkeeper-client-windows-amd64.exe
+bin/gophkeeper-client-windows-arm64.exe
+bin/gophkeeper-client-linux-amd64
+bin/gophkeeper-client-linux-arm64
+bin/gophkeeper-client-darwin-amd64
+bin/gophkeeper-client-darwin-arm64
+```
+
+Каждый бинарник содержит зашитые при сборке версию и дату сборки
+(`gophkeeper-client-<os>-<arch> version`).
+
 Примеры (адрес сервера по умолчанию `localhost:50051`):
 
 ```bash
@@ -229,6 +252,7 @@ payload, типозависимую семантику реализует кли
 | `make lint`                   | golangci-lint                                                   |
 | `make test`                   | все тесты с `-race` и профилем покрытия                         |
 | `make build`                  | сборка `bin/gophkeeper-server` и `bin/gophkeeper-client`        |
+| `make build-client-all`       | кросс-сборка клиента для всех платформ (см. ниже)               |
 | `make docker-build`           | образ сервера `gophkeeper-server`                               |
 | `make generate`               | регенерация gRPC-кода из `proto/` (нужен buf + плагины)         |
 | `make migrate-up/down`        | миграции (нужен `migrate` CLI; DSN переопределяется `DSN=...`)  |

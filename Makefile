@@ -9,7 +9,10 @@ DSN ?= postgres://gophkeeper:gophkeeper@localhost:5432/gophkeeper?sslmode=disabl
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.buildDate=$(BUILD_DATE)
 
-.PHONY: all lint test build build-server build-client docker-build generate migrate-up migrate-down
+# Platforms the client is cross-compiled for by build-client-all.
+CLIENT_PLATFORMS := windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+
+.PHONY: all lint test build build-server build-client build-client-all docker-build generate migrate-up migrate-down
 
 all: lint test build
 
@@ -32,6 +35,22 @@ build-server:
 ## build-client: build the client binary into bin/
 build-client:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/gophkeeper-client ./cmd/client
+
+## build-client-all: cross-compile the client for all supported platforms
+## (windows/linux/darwin × amd64/arm64) into bin/gophkeeper-client-<os>-<arch>.
+## The client is a pure-Go static binary, so CGO is disabled everywhere.
+## Only the CLI/TUI is distributed this way; the server ships as a Docker image.
+build-client-all:
+	@mkdir -p bin
+	@set -e; for platform in $(CLIENT_PLATFORMS); do \
+		os=$${platform%/*}; arch=$${platform#*/}; \
+		out=bin/gophkeeper-client-$${os}-$${arch}; \
+		[ "$${os}" = "windows" ] && out=$${out}.exe; \
+		echo "GOOS=$${os} GOARCH=$${arch} -> $${out}"; \
+		CGO_ENABLED=0 GOOS=$${os} GOARCH=$${arch} \
+			go build -trimpath -ldflags "$(LDFLAGS)" -o "$${out}" ./cmd/client; \
+	done
+	@echo "Done. Binaries: bin/gophkeeper-client-*"
 
 ## docker-build: build the server Docker image
 docker-build:
