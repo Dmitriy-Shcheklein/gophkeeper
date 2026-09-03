@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1"
+	"github.com/dmitriy/gophkeeper/internal/server/model"
 	"github.com/dmitriy/gophkeeper/internal/server/service"
 )
 
@@ -17,10 +18,11 @@ import (
 // with mocks; *service.AuthService satisfies it.
 type authService interface {
 	// Register validates the credentials and creates a user account,
-	// returning an access token.
-	Register(ctx context.Context, login, password string) (string, error)
-	// Login verifies the credentials, returning an access token.
-	Login(ctx context.Context, login, password string) (string, error)
+	// returning the created user and an access token.
+	Register(ctx context.Context, login, password string) (*model.User, string, error)
+	// Login verifies the credentials, returning the user and an
+	// access token.
+	Login(ctx context.Context, login, password string) (*model.User, string, error)
 }
 
 // AuthHandler implements gophkeeperv1.AuthServiceServer on top of the
@@ -43,26 +45,22 @@ func NewAuthHandler(auth authService) *AuthHandler {
 	return &AuthHandler{auth: auth}
 }
 
-// Register creates a new user account and returns an access token.
-// The user field of the response is left unset: the service layer
-// returns only the token, and the client already knows the login it
-// registered.
+// Register creates a new user account and returns the created user
+// with an access token.
 func (h *AuthHandler) Register(ctx context.Context, req *gophkeeperv1.RegisterRequest) (*gophkeeperv1.RegisterResponse, error) {
-	token, err := h.auth.Register(ctx, req.GetLogin(), req.GetPassword())
+	user, token, err := h.auth.Register(ctx, req.GetLogin(), req.GetPassword())
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.RegisterResponse{AccessToken: token}, nil
+	return &gophkeeperv1.RegisterResponse{User: userToProto(user), AccessToken: token}, nil
 }
 
-// Login verifies the credentials and returns an access token.
-// The user field of the response is left unset: the service layer
-// returns only the token, and the client already knows the login it
-// authenticated with.
+// Login verifies the credentials and returns the authenticated user
+// with an access token.
 func (h *AuthHandler) Login(ctx context.Context, req *gophkeeperv1.LoginRequest) (*gophkeeperv1.LoginResponse, error) {
-	token, err := h.auth.Login(ctx, req.GetLogin(), req.GetPassword())
+	user, token, err := h.auth.Login(ctx, req.GetLogin(), req.GetPassword())
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.LoginResponse{AccessToken: token}, nil
+	return &gophkeeperv1.LoginResponse{User: userToProto(user), AccessToken: token}, nil
 }

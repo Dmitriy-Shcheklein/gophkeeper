@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,24 +26,34 @@ import (
 // fakeAuthService is a hand-written mock of the transport.authService
 // interface, recording invocations and returning preset results.
 type fakeAuthService struct {
-	registerFn func(ctx context.Context, login, password string) (string, error)
-	loginFn    func(ctx context.Context, login, password string) (string, error)
+	registerFn func(ctx context.Context, login, password string) (*model.User, string, error)
+	loginFn    func(ctx context.Context, login, password string) (*model.User, string, error)
 }
 
-func (f *fakeAuthService) Register(ctx context.Context, login, password string) (string, error) {
+func (f *fakeAuthService) Register(ctx context.Context, login, password string) (*model.User, string, error) {
 	return f.registerFn(ctx, login, password)
 }
 
-func (f *fakeAuthService) Login(ctx context.Context, login, password string) (string, error) {
+func (f *fakeAuthService) Login(ctx context.Context, login, password string) (*model.User, string, error) {
 	return f.loginFn(ctx, login, password)
+}
+
+// sampleUser returns a fully populated domain user for mapping tests.
+func sampleUser() *model.User {
+	return &model.User{
+		ID:        "user-1",
+		Login:     "alice",
+		PassHash:  "$2a$10$hash",
+		CreatedAt: time.Unix(1700000000, 0),
+	}
 }
 
 func TestAuthHandler_Register_Success(t *testing.T) {
 	var gotLogin, gotPassword string
 	fake := &fakeAuthService{
-		registerFn: func(_ context.Context, login, password string) (string, error) {
+		registerFn: func(_ context.Context, login, password string) (*model.User, string, error) {
 			gotLogin, gotPassword = login, password
-			return "issued-token", nil
+			return sampleUser(), "issued-token", nil
 		},
 	}
 	handler := NewAuthHandler(fake)
@@ -57,7 +68,10 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	assert.Equal(t, "strong-password", gotPassword)
 	require.NotNil(t, resp)
 	assert.Equal(t, "issued-token", resp.GetAccessToken())
-	assert.Nil(t, resp.GetUser())
+	require.NotNil(t, resp.GetUser())
+	assert.Equal(t, "user-1", resp.GetUser().GetId())
+	assert.Equal(t, "alice", resp.GetUser().GetLogin())
+	assert.Equal(t, int64(1700000000), resp.GetUser().GetCreatedAt())
 }
 
 func TestAuthHandler_Register_ErrorMapping(t *testing.T) {
@@ -95,8 +109,8 @@ func TestAuthHandler_Register_ErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeAuthService{
-				registerFn: func(context.Context, string, string) (string, error) {
-					return "", tt.serviceErr
+				registerFn: func(context.Context, string, string) (*model.User, string, error) {
+					return nil, "", tt.serviceErr
 				},
 			}
 			handler := NewAuthHandler(fake)
@@ -116,9 +130,9 @@ func TestAuthHandler_Register_ErrorMapping(t *testing.T) {
 func TestAuthHandler_Login_Success(t *testing.T) {
 	var gotLogin, gotPassword string
 	fake := &fakeAuthService{
-		loginFn: func(_ context.Context, login, password string) (string, error) {
+		loginFn: func(_ context.Context, login, password string) (*model.User, string, error) {
 			gotLogin, gotPassword = login, password
-			return "issued-token", nil
+			return sampleUser(), "issued-token", nil
 		},
 	}
 	handler := NewAuthHandler(fake)
@@ -133,7 +147,10 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	assert.Equal(t, "strong-password", gotPassword)
 	require.NotNil(t, resp)
 	assert.Equal(t, "issued-token", resp.GetAccessToken())
-	assert.Nil(t, resp.GetUser())
+	require.NotNil(t, resp.GetUser())
+	assert.Equal(t, "user-1", resp.GetUser().GetId())
+	assert.Equal(t, "alice", resp.GetUser().GetLogin())
+	assert.Equal(t, int64(1700000000), resp.GetUser().GetCreatedAt())
 }
 
 func TestAuthHandler_Login_ErrorMapping(t *testing.T) {
@@ -165,8 +182,8 @@ func TestAuthHandler_Login_ErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeAuthService{
-				loginFn: func(context.Context, string, string) (string, error) {
-					return "", tt.serviceErr
+				loginFn: func(context.Context, string, string) (*model.User, string, error) {
+					return nil, "", tt.serviceErr
 				},
 			}
 			handler := NewAuthHandler(fake)

@@ -41,6 +41,21 @@ func entryTypeFromProto(t gophkeeperv1.EntryType) model.EntryType {
 	}
 }
 
+// userToProto converts a domain user to its protobuf representation.
+// The password hash is deliberately never mapped: it must not leave
+// the server. Timestamps are expressed as Unix seconds; nil yields
+// nil.
+func userToProto(u *model.User) *gophkeeperv1.User {
+	if u == nil {
+		return nil
+	}
+	return &gophkeeperv1.User{
+		Id:        u.ID,
+		Login:     u.Login,
+		CreatedAt: u.CreatedAt.Unix(),
+	}
+}
+
 // entryToProto converts a domain entry to its protobuf representation.
 // Timestamps are expressed as Unix seconds; nil yields nil.
 func entryToProto(e *model.Entry) *gophkeeperv1.Entry {

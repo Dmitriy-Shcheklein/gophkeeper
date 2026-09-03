@@ -63,46 +63,55 @@ func NewAuthService(users repository.UserRepository, jwt *auth.JWTManager) *Auth
 }
 
 // Register validates the credentials, stores a bcrypt hash of the
-// password and returns a signed JWT for the new user. Returns
-// model.ErrAlreadyExists if the login is taken, or one of the validation
-// sentinels above for invalid input.
-func (s *AuthService) Register(ctx context.Context, login, password string) (string, error) {
+// password and returns the created user together with a signed JWT
+// for the new user. Returns model.ErrAlreadyExists if the login is
+// taken, or one of the validation sentinels above for invalid input.
+//
+// The returned user is a copy with the password hash zeroed out, so
+// the stored hash never leaves the service layer.
+func (s *AuthService) Register(ctx context.Context, login, password string) (*model.User, string, error) {
 	if err := validateLogin(login); err != nil {
-		return "", err
+		return nil, "", err
 	}
 	if err := validatePassword(password); err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", fmt.Errorf("service: hash password: %w", err)
+		return nil, "", fmt.Errorf("service: hash password: %w", err)
 	}
 
 	user := &model.User{Login: login, PassHash: string(hash)}
 	if err := s.users.Create(ctx, user); err != nil {
-		return "", fmt.Errorf("service: create user: %w", err)
+		return nil, "", fmt.Errorf("service: create user: %w", err)
 	}
 
 	token, err := s.jwt.Generate(user.ID, user.Login)
 	if err != nil {
-		return "", fmt.Errorf("service: generate token: %w", err)
+		return nil, "", fmt.Errorf("service: generate token: %w", err)
 	}
-	return token, nil
+	// Like Login, never expose the password hash to the caller.
+	returned := *user
+	returned.PassHash = ""
+	return &returned, token, nil
 }
 
 // Login validates the credentials, checks the password against the
-// stored hash and returns a signed JWT. Unknown users and wrong
-// passwords produce the same error (model.ErrUnauthorized wrapping
-// ErrInvalidCredentials) to avoid revealing whether a login exists.
-// Invalid input (e.g. empty login) returns the validation sentinels
-// above.
-func (s *AuthService) Login(ctx context.Context, login, password string) (string, error) {
+// stored hash and returns the user together with a signed JWT.
+// Unknown users and wrong passwords produce the same error
+// (model.ErrUnauthorized wrapping ErrInvalidCredentials) to avoid
+// revealing whether a login exists. Invalid input (e.g. empty login)
+// returns the validation sentinels above.
+//
+// The returned user is a copy with the password hash zeroed out, so
+// the stored hash never leaves the service layer.
+func (s *AuthService) Login(ctx context.Context, login, password string) (*model.User, string, error) {
 	if err := validateLogin(login); err != nil {
-		return "", err
+		return nil, "", err
 	}
 	if password == "" {
-		return "", ErrEmptyPassword
+		return nil, "", ErrEmptyPassword
 	}
 
 	user, err := s.users.GetByLogin(ctx, login)
@@ -113,20 +122,22 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (string
 			// roughly as long as the wrong-password path, keeping the
 			// returned error identical (no user enumeration).
 			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
-			return "", fmt.Errorf("service: login: %w: %w", model.ErrUnauthorized, ErrInvalidCredentials)
+			return nil, "", fmt.Errorf("service: login: %w: %w", model.ErrUnauthorized, ErrInvalidCredentials)
 		}
-		return "", fmt.Errorf("service: get user: %w", err)
+		return nil, "", fmt.Errorf("service: get user: %w", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PassHash), []byte(password)); err != nil {
-		return "", fmt.Errorf("service: login: %w: %w", model.ErrUnauthorized, ErrInvalidCredentials)
+		return nil, "", fmt.Errorf("service: login: %w: %w", model.ErrUnauthorized, ErrInvalidCredentials)
 	}
 
 	token, err := s.jwt.Generate(user.ID, user.Login)
 	if err != nil {
-		return "", fmt.Errorf("service: generate token: %w", err)
+		return nil, "", fmt.Errorf("service: generate token: %w", err)
 	}
-	return token, nil
+	returned := *user
+	returned.PassHash = ""
+	return &returned, token, nil
 }
 
 // validateLogin checks the login against the allowed length limits.

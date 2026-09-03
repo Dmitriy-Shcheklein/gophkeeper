@@ -71,7 +71,7 @@ func newTestService(t *testing.T) (*AuthService, *mockUserRepo) {
 func TestRegisterSuccess(t *testing.T) {
 	svc, repo := newTestService(t)
 
-	token, err := svc.Register(context.Background(), "alice", "strong-password")
+	registered, token, err := svc.Register(context.Background(), "alice", "strong-password")
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
@@ -81,6 +81,13 @@ func TestRegisterSuccess(t *testing.T) {
 	// Password must be stored hashed, never in plaintext.
 	assert.NotEqual(t, "strong-password", user.PassHash)
 	assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(user.PassHash), []byte("strong-password")))
+
+	// The returned user must be the created one, identified and
+	// without the password hash.
+	require.NotNil(t, registered)
+	assert.Equal(t, user.ID, registered.ID)
+	assert.Equal(t, "alice", registered.Login)
+	assert.Empty(t, registered.PassHash)
 
 	// The token must verify and carry the user identity.
 	claims, err := svc.jwt.Verify(token)
@@ -92,10 +99,10 @@ func TestRegisterSuccess(t *testing.T) {
 func TestRegisterDuplicate(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	_, err := svc.Register(context.Background(), "alice", "strong-password")
+	_, _, err := svc.Register(context.Background(), "alice", "strong-password")
 	require.NoError(t, err)
 
-	_, err = svc.Register(context.Background(), "alice", "another-password")
+	_, _, err = svc.Register(context.Background(), "alice", "another-password")
 	require.ErrorIs(t, err, model.ErrAlreadyExists)
 }
 
@@ -114,24 +121,24 @@ func TestRegisterValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, _ := newTestService(t)
-			_, err := svc.Register(context.Background(), tt.login, tt.password)
+			_, _, err := svc.Register(context.Background(), tt.login, tt.password)
 			assert.Error(t, err)
 		})
 	}
 
 	// 72 bytes is exactly the bcrypt limit and must be accepted.
 	svc, _ := newTestService(t)
-	_, err := svc.Register(context.Background(), "alice", strings.Repeat("a", 72))
+	_, _, err := svc.Register(context.Background(), "alice", strings.Repeat("a", 72))
 	assert.NoError(t, err)
 }
 
 func TestLoginSuccess(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	_, err := svc.Register(context.Background(), "alice", "strong-password")
+	_, _, err := svc.Register(context.Background(), "alice", "strong-password")
 	require.NoError(t, err)
 
-	token, err := svc.Login(context.Background(), "alice", "strong-password")
+	_, token, err := svc.Login(context.Background(), "alice", "strong-password")
 	require.NoError(t, err)
 
 	claims, err := svc.jwt.Verify(token)
@@ -139,13 +146,27 @@ func TestLoginSuccess(t *testing.T) {
 	assert.Equal(t, "alice", claims.Login)
 }
 
+func TestLoginReturnsUserWithoutHash(t *testing.T) {
+	svc, repo := newTestService(t)
+
+	_, _, err := svc.Register(context.Background(), "alice", "strong-password")
+	require.NoError(t, err)
+
+	user, _, err := svc.Login(context.Background(), "alice", "strong-password")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, repo.users["alice"].ID, user.ID)
+	assert.Equal(t, "alice", user.Login)
+	assert.Empty(t, user.PassHash)
+}
+
 func TestLoginWrongPassword(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	_, err := svc.Register(context.Background(), "alice", "strong-password")
+	_, _, err := svc.Register(context.Background(), "alice", "strong-password")
 	require.NoError(t, err)
 
-	_, err = svc.Login(context.Background(), "alice", "wrong-password")
+	_, _, err = svc.Login(context.Background(), "alice", "wrong-password")
 	require.ErrorIs(t, err, model.ErrUnauthorized)
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
@@ -153,7 +174,7 @@ func TestLoginWrongPassword(t *testing.T) {
 func TestLoginUnknownUser(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	_, err := svc.Login(context.Background(), "ghost", "strong-password")
+	_, _, err := svc.Login(context.Background(), "ghost", "strong-password")
 	require.ErrorIs(t, err, model.ErrUnauthorized)
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
@@ -161,11 +182,11 @@ func TestLoginUnknownUser(t *testing.T) {
 func TestLoginWrongPasswordMatchesUnknownUserError(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	_, err := svc.Register(context.Background(), "alice", "strong-password")
+	_, _, err := svc.Register(context.Background(), "alice", "strong-password")
 	require.NoError(t, err)
 
-	_, wrongPassErr := svc.Login(context.Background(), "alice", "wrong-password")
-	_, unknownUserErr := svc.Login(context.Background(), "ghost", "strong-password")
+	_, _, wrongPassErr := svc.Login(context.Background(), "alice", "wrong-password")
+	_, _, unknownUserErr := svc.Login(context.Background(), "ghost", "strong-password")
 	require.Error(t, wrongPassErr)
 	require.Error(t, unknownUserErr)
 	// Same error for both cases: do not reveal user existence.
@@ -175,7 +196,7 @@ func TestLoginWrongPasswordMatchesUnknownUserError(t *testing.T) {
 func TestLoginValidation(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	_, err := svc.Login(context.Background(), "", "strong-password")
+	_, _, err := svc.Login(context.Background(), "", "strong-password")
 	assert.Error(t, err)
 }
 
@@ -195,6 +216,6 @@ func TestRegisterRepoErrorPropagates(t *testing.T) {
 	require.NoError(t, err)
 	svc := NewAuthService(repo, mgr)
 
-	_, err = svc.Register(context.Background(), "alice", "strong-password")
+	_, _, err = svc.Register(context.Background(), "alice", "strong-password")
 	assert.ErrorContains(t, err, "boom")
 }
