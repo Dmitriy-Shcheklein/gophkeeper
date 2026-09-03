@@ -12,10 +12,12 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -58,7 +60,8 @@ type Config struct {
 	// DSN is the PostgreSQL connection string in URL form, e.g.
 	// "postgres://user:pass@host:5432/db?sslmode=disable". It is
 	// required: server startup fails without it. The URL form is
-	// required as well because the migrations runner reuses it.
+	// required as well because the migrations runner and DSN
+	// redaction parse it as a URL; keyword-value DSNs are rejected.
 	DSN string
 	// JWTSecret is the HMAC secret used to sign access tokens. It is
 	// required: server startup fails without it.
@@ -69,14 +72,33 @@ type Config struct {
 	LogLevel slog.Level
 }
 
+// ErrHelp is returned by Load when the -h or --help flag is requested.
+// The flag usage text has already been printed to stdout by the time
+// ErrHelp is returned, so the caller should exit successfully without
+// printing anything else.
+var ErrHelp = errors.New("config: help requested")
+
 // Load resolves the configuration from the given command-line
 // arguments and the process environment, with flags taking precedence
 // over environment variables. It returns an error describing the first
-// problem found: unknown flags, an unparsable --jwt-ttl, an unknown
-// --log-level, or a missing required DSN / JWT secret.
+// problem found: unknown flags, an unparsable --jwt-ttl (or $JWT_TTL),
+// an unknown --log-level (or $LOG_LEVEL), a DSN that is not a
+// postgres:// URL, or a missing required DSN / JWT secret. When the
+// -h or --help flag is requested it returns ErrHelp after printing the
+// usage to stdout.
 func Load(args []string) (*Config, error) {
 	fs := flag.NewFlagSet("gophkeeper-server", flag.ContinueOnError)
+	// Flag errors are wrapped and reported by the caller; help output
+	// goes to stdout via the custom Usage below.
 	fs.SetOutput(io.Discard)
+	fs.Usage = func() {
+		_, _ = fmt.Fprintf(os.Stdout, "Usage of %s:\n", fs.Name())
+		// PrintDefaults writes to the flag set output, which is
+		// discarded for errors; point it at stdout for the usage.
+		fs.SetOutput(os.Stdout)
+		fs.PrintDefaults()
+		fs.SetOutput(io.Discard)
+	}
 
 	var (
 		address  = fs.String("address", envString(EnvGRPCAddress, DefaultAddress), "gRPC listen address ($"+EnvGRPCAddress+")")
@@ -87,24 +109,30 @@ func Load(args []string) (*Config, error) {
 	)
 
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil, ErrHelp
+		}
 		return nil, fmt.Errorf("config: parse flags: %w", err)
 	}
 
 	tokenTTL, err := time.ParseDuration(*ttl)
 	if err != nil {
-		return nil, fmt.Errorf("config: parse --jwt-ttl %q: %w", *ttl, err)
+		return nil, fmt.Errorf("config: parse %s %q: %w", valueSource(fs, "jwt-ttl", EnvJWTTTL), *ttl, err)
 	}
 	if tokenTTL <= 0 {
-		return nil, fmt.Errorf("config: --jwt-ttl %q must be positive", *ttl)
+		return nil, fmt.Errorf("config: %s %q must be positive", valueSource(fs, "jwt-ttl", EnvJWTTTL), *ttl)
 	}
 
-	level, err := parseLevel(*logLevel)
+	level, err := parseLevel(valueSource(fs, "log-level", EnvLogLevel), *logLevel)
 	if err != nil {
 		return nil, err
 	}
 
 	if *dsn == "" {
 		return nil, fmt.Errorf("config: --dsn (or $%s) is required", EnvDSN)
+	}
+	if err := validateDSN(*dsn); err != nil {
+		return nil, fmt.Errorf("config: invalid --dsn (or $%s): %w", EnvDSN, err)
 	}
 	if *secret == "" {
 		return nil, fmt.Errorf("config: --jwt-secret (or $%s) is required", EnvJWTSecret)
@@ -117,6 +145,27 @@ func Load(args []string) (*Config, error) {
 		JWTTTL:    tokenTTL,
 		LogLevel:  level,
 	}, nil
+}
+
+// valueSource describes where the value of the named setting came
+// from: the command-line flag if it was explicitly set, otherwise the
+// environment variable if it is non-empty, otherwise the flag name
+// (the default value). It is used to make validation errors point at
+// the actual source of an invalid value.
+func valueSource(fs *flag.FlagSet, flagName, envName string) string {
+	fromFlag := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == flagName {
+			fromFlag = true
+		}
+	})
+	if fromFlag {
+		return "--" + flagName
+	}
+	if os.Getenv(envName) != "" {
+		return "$" + envName
+	}
+	return "--" + flagName
 }
 
 // envString returns the value of the environment variable name, or
@@ -139,10 +188,25 @@ func envLevelName(fallback slog.Level) string {
 
 // parseLevel converts a level name (case-insensitive: debug, info,
 // warn or error) into a slog.Level.
-func parseLevel(name string) (slog.Level, error) {
+func parseLevel(source, name string) (slog.Level, error) {
 	var level slog.Level
 	if err := level.UnmarshalText([]byte(strings.ToLower(name))); err != nil {
-		return 0, fmt.Errorf("config: parse --log-level %q: %w", name, err)
+		return 0, fmt.Errorf("config: parse %s %q: %w", source, name, err)
 	}
 	return level, nil
+}
+
+// validateDSN checks that the DSN is a URL with a PostgreSQL scheme.
+// The URL form is required because both the migrations runner (which
+// swaps the scheme to golang-migrate's pgx5 driver) and DSN redaction
+// parse the DSN as a URL.
+func validateDSN(dsn string) error {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return fmt.Errorf("parse DSN: %w", err)
+	}
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return fmt.Errorf("unsupported DSN scheme %q: use a postgres:// URL, keyword-value DSNs are not supported", u.Scheme)
+	}
+	return nil
 }

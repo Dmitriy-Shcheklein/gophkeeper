@@ -46,6 +46,11 @@ const redacted = "***"
 
 func main() {
 	if err := run(); err != nil {
+		// -h/--help already printed the usage to stdout; exit
+		// successfully.
+		if errors.Is(err, config.ErrHelp) {
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stderr, "gophkeeper-server: %v\n", err)
 		os.Exit(1)
 	}
@@ -64,14 +69,29 @@ func run() error {
 	logger := newLogger(cfg.LogLevel)
 	logStartupConfig(logger, cfg)
 
+	// A signal during startup (before Serve) must abort the startup
+	// instead of being swallowed; blocking steps such as connecting or
+	// migrating are checked at each stage boundary below.
+	if ctx.Err() != nil {
+		logger.Info("shutdown signal received during startup")
+		return nil
+	}
+
 	storage, err := postgres.New(ctx, cfg.DSN)
 	if err != nil {
+		if ctx.Err() != nil {
+			logger.Info("shutdown signal received during startup")
+			return nil
+		}
 		return fmt.Errorf("connect to database: %w", err)
 	}
 	defer storage.Close()
 
 	if err := runMigrations(cfg.DSN, logger); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
+	}
+	if signalledDuringStartup(ctx, logger) {
+		return nil
 	}
 
 	jwtManager, err := auth.New(cfg.JWTSecret, cfg.JWTTTL)
@@ -94,6 +114,9 @@ func run() error {
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Address, err)
+	}
+	if signalledDuringStartup(ctx, logger) {
+		return nil
 	}
 	logger.Info("serving gRPC", "address", cfg.Address)
 
@@ -150,14 +173,34 @@ func logStartupConfig(logger *slog.Logger, cfg *config.Config) {
 	)
 }
 
-// redactDSN hides the password component of a DSN URL, returning a
-// generic placeholder when the DSN is not a parseable URL.
+// redactDSN hides secret components of a DSN URL for logging: the
+// userinfo password (via url.URL.Redacted) and a password query
+// parameter, which pgx also accepts. A DSN that fails to parse (which
+// config validation should make impossible) is replaced entirely.
 func redactDSN(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return redacted
 	}
+	query := u.Query()
+	if query.Has("password") {
+		// "xxxxx" matches the url.URL.Redacted convention; "***"
+		// would be percent-encoded in the query string.
+		query.Set("password", "xxxxx")
+		u.RawQuery = query.Encode()
+	}
 	return u.Redacted()
+}
+
+// signalledDuringStartup reports whether a termination signal arrived
+// before the server began serving, logging the aborted stage when it
+// did. The deferred storage close releases the pool.
+func signalledDuringStartup(ctx context.Context, logger *slog.Logger) bool {
+	if ctx.Err() == nil {
+		return false
+	}
+	logger.Info("shutdown signal received during startup")
+	return true
 }
 
 // runMigrations applies all pending database migrations embedded in
@@ -170,14 +213,11 @@ func runMigrations(dsn string, logger *slog.Logger) error {
 	}
 
 	// golang-migrate's pgx/v5 driver is registered under the pgx5
-	// scheme; the config requires the DSN to be a URL, so the scheme
-	// can simply be swapped.
+	// scheme. Load guarantees the DSN is a postgres:// URL, so the
+	// scheme can simply be swapped.
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return fmt.Errorf("parse DSN: %w", err)
-	}
-	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
-		return fmt.Errorf("unsupported DSN scheme %q: use a postgres:// URL (required by the migrations runner)", u.Scheme)
 	}
 	u.Scheme = "pgx5"
 

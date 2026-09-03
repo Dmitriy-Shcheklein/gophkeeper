@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"log/slog"
 	"testing"
 	"time"
@@ -106,6 +107,46 @@ func TestLoad(t *testing.T) {
 			wantErr: "parse --log-level",
 		},
 		{
+			name:    "bad log level from env blames env",
+			env:     map[string]string{"LOG_LEVEL": "verbose"},
+			args:    validArgs,
+			wantErr: "parse $LOG_LEVEL",
+		},
+		{
+			name:    "bad jwt ttl from env blames env",
+			env:     map[string]string{"JWT_TTL": "yesterday"},
+			args:    validArgs,
+			wantErr: "parse $JWT_TTL",
+		},
+		{
+			name: "flag overrides bad env jwt ttl",
+			env:  map[string]string{"JWT_TTL": "yesterday"},
+			args: append(validArgs, "--jwt-ttl", "2h"),
+			want: &config.Config{
+				Address:   ":50051",
+				DSN:       "postgres://u:p@localhost:5432/gk",
+				JWTSecret: "secret",
+				JWTTTL:    2 * time.Hour,
+				LogLevel:  slog.LevelInfo,
+			},
+		},
+		{
+			name:    "flag wins over env as error source",
+			env:     map[string]string{"JWT_TTL": "2h"},
+			args:    append(validArgs, "--jwt-ttl", "0s"),
+			wantErr: "--jwt-ttl",
+		},
+		{
+			name:    "keyword-value dsn rejected",
+			args:    []string{"--dsn", "host=localhost user=u password=p", "--jwt-secret", "secret"},
+			wantErr: "postgres:// URL",
+		},
+		{
+			name:    "non-postgres dsn scheme rejected",
+			args:    []string{"--dsn", "mysql://u:p@localhost/db", "--jwt-secret", "secret"},
+			wantErr: "unsupported DSN scheme",
+		},
+		{
 			name:    "unknown flag",
 			args:    append(validArgs, "--unknown"),
 			wantErr: "parse flags",
@@ -152,4 +193,21 @@ func TestLoadLogLevelCaseInsensitive(t *testing.T) {
 	cfg, err := config.Load(validArgs)
 	require.NoError(t, err)
 	assert.Equal(t, slog.LevelWarn, cfg.LogLevel)
+}
+
+func TestLoadHelp(t *testing.T) {
+	for _, arg := range []string{"-h", "--help"} {
+		t.Run(arg, func(t *testing.T) {
+			cfg, err := config.Load([]string{arg})
+			require.Nil(t, cfg)
+			require.True(t, errors.Is(err, config.ErrHelp),
+				"expected ErrHelp, got %v", err)
+		})
+	}
+}
+
+func TestLoadHelpEvenWithInvalidSettings(t *testing.T) {
+	// Help short-circuits before any validation.
+	_, err := config.Load([]string{"-h", "--jwt-ttl", "garbage"})
+	require.True(t, errors.Is(err, config.ErrHelp))
 }
