@@ -7,16 +7,18 @@ import (
 )
 
 // newTUICommand builds `gophkeeper tui`: the interactive terminal UI
-// over the same service layer as the other commands. It requires an
-// authenticated session (the standard requireAuth guard); without
-// one the friendly "not authenticated" error is printed and the
-// process exits non-zero instead of starting the program.
+// over the same service layer as the other commands. It starts
+// without a saved token too: in that case the TUI shows its own
+// login/register screen instead of the entry list.
 func newTUICommand(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
-		Short: "Interactive terminal UI",
+		Short: "Interactive terminal UI (includes login/register)",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if err := app.requireAuth(); err != nil {
+			// The TUI handles login/register on its own auth screen,
+			// so only the lazy service wiring is needed here — no
+			// authentication guard.
+			if err := app.initServices(); err != nil {
 				return err
 			}
 			if app.runTUI != nil {

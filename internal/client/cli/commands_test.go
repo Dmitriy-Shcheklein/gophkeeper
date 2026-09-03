@@ -425,12 +425,19 @@ func TestVersionCommand(t *testing.T) {
 	require.Contains(t, text, "platform: ")
 }
 
-func TestTUICommandRequiresAuthentication(t *testing.T) {
-	app, _, errOut := newTestApp(&fakeAuth{}, newFakeEntries())
+func TestTUICommandLaunchesWithoutAuthentication(t *testing.T) {
+	// The TUI handles login/register on its own auth screen, so the
+	// command must launch even without a saved token.
+	app, _, _ := newTestApp(&fakeAuth{}, newFakeEntries())
+	var called bool
+	app.runTUI = func(_ authClient, _ entryClient) error {
+		called = true
+		return nil
+	}
 
 	_, _, err := run(t, app, "tui")
-	require.Error(t, err)
-	require.Contains(t, errOut.String(), "not authenticated, run `gophkeeper login`")
+	require.NoError(t, err)
+	require.True(t, called)
 }
 
 func TestTUICommandLaunchesWithServices(t *testing.T) {

@@ -16,9 +16,12 @@ import (
 type screen int
 
 // The screens of the TUI. The stack always conceptually starts with
-// the list; detail, form and confirm are pushed on top of it.
+// the list; detail, form and confirm are pushed on top of it. The
+// auth screen replaces the list when the TUI starts without a saved
+// token (and is popped once login/register succeeds).
 const (
 	screenList screen = iota
+	screenAuth
 	screenDetail
 	screenForm
 	screenConfirm
@@ -45,6 +48,9 @@ type (
 // stack, the entry set, the status bar and routes keys to the
 // topmost screen.
 type appModel struct {
+	// authSvc is the authentication service; non-nil only while the
+	// auth screen is relevant (it submits login/register).
+	authSvc authClient
 	entries entryClient
 
 	// width and height are the terminal dimensions from the last
@@ -87,27 +93,41 @@ type appModel struct {
 	// form and confirm hold the state of the stacked screens.
 	form    formModel
 	confirm confirmModel
+	// auth holds the state of the login/register screen.
+	auth authModel
 
 	// quitting is set when the user asked to exit.
 	quitting bool
 }
 
-// newAppModel returns the root model for the given services; the
-// entry set is loaded asynchronously by Init.
-func newAppModel(entries entryClient) appModel {
+// newAppModel returns the root model for the given services. Without
+// an authenticated session it starts on the login/register screen
+// instead of the list; with one, the entry set is loaded
+// asynchronously by Init.
+func newAppModel(auth authClient, entries entryClient) appModel {
 	fi := textinput.New()
 	fi.Placeholder = "filter by label..."
 	fi.Prompt = "/"
 	fi.PromptStyle = filterStyle
-	return appModel{
+	m := appModel{
+		authSvc:     auth,
 		entries:     entries,
 		filterInput: fi,
 		visible:     nil,
 	}
+	if auth != nil && !auth.IsAuthenticated() {
+		m.auth = newAuthModel()
+		m.pushScreen(screenAuth)
+	}
+	return m
 }
 
-// Init kicks off the asynchronous initial load of the entry set.
+// Init kicks off the asynchronous initial load of the entry set; on
+// the auth screen there is nothing to load yet.
 func (m appModel) Init() tea.Cmd {
+	if m.topScreen() == screenAuth {
+		return nil
+	}
 	return loadEntriesCmd(m.entries)
 }
 
@@ -271,6 +291,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, loadEntriesCmd(m.entries)
 
+	case authedMsg:
+		m.loading = false
+		if msg.err != nil {
+			// Stay on the auth screen so the user can retry.
+			m.auth.err = msg.err.Error()
+			return m, nil
+		}
+		m.stack = nil
+		m.setStatus("logged in")
+		return m, loadEntriesCmd(m.entries)
+
 	case deletedMsg:
 		m.loading = false
 		if msg.err != nil {
@@ -294,6 +325,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey routes a key press to the topmost screen.
 func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.topScreen() {
+	case screenAuth:
+		return m.updateAuth(msg)
 	case screenList:
 		return m.updateList(msg)
 	case screenDetail:
@@ -312,6 +345,8 @@ func (m appModel) View() string {
 		return ""
 	}
 	switch m.topScreen() {
+	case screenAuth:
+		return m.viewAuth()
 	case screenDetail:
 		return m.viewDetail()
 	case screenForm:

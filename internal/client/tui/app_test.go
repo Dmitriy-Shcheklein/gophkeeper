@@ -20,10 +20,39 @@ import (
 // fakeAuth is an in-memory authClient fake.
 type fakeAuth struct {
 	token string
+
+	registered  [][2]string
+	loggedIn    [][2]string
+	registerErr error
+	loginErr    error
 }
 
 func (f *fakeAuth) Restore() error        { return nil }
 func (f *fakeAuth) IsAuthenticated() bool { return f.token != "" }
+
+func (f *fakeAuth) Register(_ context.Context, login, password string) error {
+	if f.registerErr != nil {
+		return f.registerErr
+	}
+	f.registered = append(f.registered, [2]string{login, password})
+	f.token = "new-token"
+	return nil
+}
+
+func (f *fakeAuth) Login(_ context.Context, login, password string) error {
+	if f.loginErr != nil {
+		return f.loginErr
+	}
+	f.loggedIn = append(f.loggedIn, [2]string{login, password})
+	f.token = "new-token"
+	return nil
+}
+
+// authed returns an authenticated fakeAuth for tests that start on
+// the entry list.
+func authed() *fakeAuth {
+	return &fakeAuth{token: "test-token"}
+}
 
 // fakeEntries is an in-memory entryClient fake recording calls and
 // configurable failures.
@@ -219,13 +248,17 @@ func sampleEntries(t *testing.T) []*model.Entry {
 }
 
 func TestRunNotAuthenticated(t *testing.T) {
-	err := Run(&fakeAuth{}, newFakeEntries())
-	require.ErrorIs(t, err, ErrNotAuthenticated)
+	// Without a token the model starts on the auth screen instead
+	// of failing.
+	m := newAppModel(&fakeAuth{}, newFakeEntries())
+	require.Equal(t, screenAuth, m.topScreen())
+	require.False(t, m.authSvc.IsAuthenticated())
+	require.Contains(t, m.View(), "Login to GophKeeper")
 }
 
 func TestInitialLoad(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	require.Len(t, m.all, 2)
 	require.Len(t, m.visible, 2)
@@ -239,7 +272,7 @@ func TestInitialLoad(t *testing.T) {
 func TestLoadErrorShowsStatus(t *testing.T) {
 	entries := newFakeEntries()
 	entries.syncErr = errors.New("server unreachable")
-	m := newAppModel(entries)
+	m := newAppModel(authed(), entries)
 
 	cmd := m.Init()
 	updated, _ := run(m, cmd)
@@ -252,7 +285,7 @@ func TestLoadErrorShowsStatus(t *testing.T) {
 
 func TestListNavigation(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	require.Equal(t, 0, m.cursor)
 	m = send(m, "down", "j").(appModel)
@@ -266,7 +299,7 @@ func TestListNavigation(t *testing.T) {
 
 func TestEnterOpensDetailAndEscReturns(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "enter").(appModel)
 	require.Equal(t, screenDetail, m.topScreen())
@@ -283,7 +316,7 @@ func TestEnterOpensDetailAndEscReturns(t *testing.T) {
 
 func TestDetailEditAndDeleteShortcuts(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 	m = send(m, "enter").(appModel)
 
 	m = send(m, "e").(appModel)
@@ -303,7 +336,7 @@ func TestDetailEditAndDeleteShortcuts(t *testing.T) {
 
 func TestFilterByLabel(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "/").(appModel)
 	require.True(t, m.filtering)
@@ -330,7 +363,7 @@ func TestFilterByLabel(t *testing.T) {
 
 func TestQuitFromList(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	updated, cmd := m.Update(key("q"))
 	m = updated.(appModel)
@@ -340,7 +373,7 @@ func TestQuitFromList(t *testing.T) {
 
 func TestRefreshKeyReloads(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 	syncedBefore := entries.synced
 
 	updated, cmd := m.Update(key("r"))
@@ -356,7 +389,7 @@ func TestRefreshKeyReloads(t *testing.T) {
 
 func TestNewEntryViaForm(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "n").(appModel)
 	require.Equal(t, screenForm, m.topScreen())
@@ -398,7 +431,7 @@ func TestNewEntryViaForm(t *testing.T) {
 
 func TestFormValidationShowsError(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "n").(appModel)
 	// Save immediately: label is empty.
@@ -412,7 +445,7 @@ func TestFormValidationShowsError(t *testing.T) {
 
 func TestEditCarriesVersion(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	// Open the edit form from the list (cursor on e1).
 	m = send(m, "e").(appModel)
@@ -448,7 +481,7 @@ func TestEditCarriesVersion(t *testing.T) {
 
 func TestSaveFromDetailRefreshesDetail(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	// Open the edit form from the detail screen.
 	m = send(m, "enter", "e").(appModel)
@@ -492,7 +525,7 @@ func TestSaveFromDetailRefreshesDetail(t *testing.T) {
 
 func TestDeleteFromDetailLandsOnList(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "enter", "d").(appModel)
 	require.Equal(t, screenConfirm, m.topScreen())
@@ -515,7 +548,7 @@ func TestDeleteFromDetailLandsOnList(t *testing.T) {
 
 func TestFormMasksSecretInputs(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	// Login form: the password input is masked.
 	m = send(m, "e").(appModel)
@@ -535,7 +568,7 @@ func TestFormMasksSecretInputs(t *testing.T) {
 func TestSaveErrorStaysInForm(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
 	entries.editErr = gateway.ErrConflict
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "e").(appModel)
 	updated, cmd := m.Update(key("ctrl+s"))
@@ -551,7 +584,7 @@ func TestSaveErrorStaysInForm(t *testing.T) {
 
 func TestDeleteFlow(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "d").(appModel)
 	require.Equal(t, screenConfirm, m.topScreen())
@@ -576,7 +609,7 @@ func TestDeleteFlow(t *testing.T) {
 
 func TestDeleteCancel(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	m = send(m, "d").(appModel)
 	m = send(m, "esc").(appModel)
@@ -595,7 +628,7 @@ func TestCtrlCQuitsFromEveryScreen(t *testing.T) {
 		{"n"},           // new form
 		{"/", "b", "a"}, // filter input: ctrl+c must quit, not type
 	} {
-		m := load(t, newAppModel(entries), entries)
+		m := load(t, newAppModel(authed(), entries), entries)
 		m = send(m, keys...).(appModel)
 		updated, cmd := m.Update(key("ctrl+c"))
 		m = updated.(appModel)
@@ -615,7 +648,7 @@ func TestListScrollsWithSmallWindow(t *testing.T) {
 		})
 	}
 	entries := newFakeEntries(many...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 	m.width, m.height = 80, 10 // 7 viewport rows
 	m.applyFilter()
 
@@ -632,7 +665,7 @@ func TestListScrollsWithSmallWindow(t *testing.T) {
 
 func TestWindowSizeMsgClamps(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
-	m := load(t, newAppModel(entries), entries)
+	m := load(t, newAppModel(authed(), entries), entries)
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = updated.(appModel)
@@ -711,9 +744,105 @@ func TestBuildEntryPerType(t *testing.T) {
 
 func TestViewAlwaysRendersSomething(t *testing.T) {
 	entries := newFakeEntries()
-	m := newAppModel(entries)
+	m := newAppModel(authed(), entries)
 	require.NotEmpty(t, strings.TrimSpace(m.View()))
 
 	m = load(t, m, entries)
 	require.Contains(t, m.View(), "no entries yet")
+}
+
+func TestAuthScreenStartsInLoginMode(t *testing.T) {
+	m := newAppModel(&fakeAuth{}, newFakeEntries())
+
+	require.Equal(t, screenAuth, m.topScreen())
+	view := m.View()
+	require.Contains(t, view, "Login to GophKeeper")
+	require.Contains(t, view, "login")
+	// Password input is masked: the view must not leak the typed value.
+	m = send(m, "l", "o", "g", "i", "n").(appModel)
+	require.Contains(t, m.View(), "login")
+	require.NotContains(t, m.View(), "••")
+}
+
+func TestAuthSubmitCallsLogin(t *testing.T) {
+	auth := &fakeAuth{}
+	m := newAppModel(auth, newFakeEntries())
+
+	m = send(m, "u", "s", "e", "r").(appModel)        // login field
+	m = send(m, "tab", "p", "a", "s", "s").(appModel) // password field
+	updated, cmd := m.tryAuth()
+	m = updated.(appModel)
+	up, _ := run(m, cmd)
+	m = up.(appModel)
+
+	// Success: auth screen is replaced by the list, entries load.
+	require.Equal(t, screenList, m.topScreen())
+	require.Len(t, auth.loggedIn, 1)
+	require.Equal(t, "user", auth.loggedIn[0][0])
+	require.Equal(t, "pass", auth.loggedIn[0][1])
+	require.Contains(t, m.status, "logged in")
+}
+
+func TestAuthRegisterMode(t *testing.T) {
+	auth := &fakeAuth{}
+	m := newAppModel(auth, newFakeEntries())
+
+	// Focus the mode selector and switch to register.
+	m = send(m, "shift+tab").(appModel)
+	require.Equal(t, 0, m.auth.focus)
+	m = send(m, "right").(appModel)
+	require.True(t, m.auth.register)
+	require.Contains(t, m.View(), "Register a new account")
+
+	m = send(m, "n", "e", "w").(appModel)
+	m = send(m, "tab", "s", "e", "c", "r", "e", "t").(appModel)
+	updated, cmd := m.tryAuth()
+	up, _ := run(updated.(appModel), cmd)
+	m = up.(appModel)
+
+	require.Len(t, auth.registered, 1)
+	require.Equal(t, "new", auth.registered[0][0])
+	require.Equal(t, "secret", auth.registered[0][1])
+	require.Equal(t, screenList, m.topScreen())
+}
+
+func TestAuthValidationErrorStaysOnScreen(t *testing.T) {
+	auth := &fakeAuth{}
+	m := newAppModel(auth, newFakeEntries())
+
+	// Empty login → in-screen error, no submit.
+	updated, cmd := m.tryAuth()
+	m = updated.(appModel)
+	require.Nil(t, cmd)
+	require.Equal(t, screenAuth, m.topScreen())
+	require.Contains(t, m.View(), "login must not be empty")
+	require.Empty(t, auth.loggedIn)
+
+	// Empty password → same.
+	m = send(m, "u", "s", "e", "r").(appModel)
+	updated, cmd = m.tryAuth()
+	m = updated.(appModel)
+	require.Nil(t, cmd)
+	require.Contains(t, m.View(), "password must not be empty")
+	require.Empty(t, auth.loggedIn)
+}
+
+func TestAuthLoginErrorStaysOnScreen(t *testing.T) {
+	auth := &fakeAuth{loginErr: errors.New("invalid login or password")}
+	m := newAppModel(auth, newFakeEntries())
+
+	m = send(m, "u", "s", "e", "r").(appModel)
+	m = send(m, "tab", "p", "w").(appModel)
+	updated, cmd := m.tryAuth()
+	up, _ := run(updated.(appModel), cmd)
+	m = up.(appModel)
+
+	require.Equal(t, screenAuth, m.topScreen())
+	require.Contains(t, m.View(), "invalid login or password")
+}
+
+func TestAuthEscQuits(t *testing.T) {
+	m := newAppModel(&fakeAuth{}, newFakeEntries())
+	m = send(m, "esc").(appModel)
+	require.True(t, m.quitting)
 }
