@@ -1,15 +1,20 @@
 package tui
 
 import (
+	"context"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
 
+	"github.com/dmitriy/gophkeeper/internal/client/model"
 	"github.com/dmitriy/gophkeeper/internal/client/render"
 )
 
 // updateDetail handles keys on the entry detail screen: esc returns
-// to the list, e opens the edit form, d the delete confirmation.
+// to the list, e opens the edit form, d the delete confirmation and
+// s streams the payload of a binary entry into a file (path asked on
+// the save screen).
 func (m appModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
@@ -25,6 +30,11 @@ func (m appModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		if m.current != nil {
 			m.openConfirm()
+		}
+	case "s":
+		if m.current != nil && m.current.Type == model.EntryTypeBinary {
+			m.save = newSaveModel()
+			m.pushScreen(screenSave)
 		}
 	}
 	return m, nil
@@ -58,6 +68,29 @@ func (m appModel) viewDetailHelp() string {
 			sb.WriteString(statusOKStyle.Render("✓ "+m.status) + "\n")
 		}
 	}
-	sb.WriteString(helpStyle.Render("e edit · d delete · esc back"))
+	help := "e edit · d delete · esc back"
+	if m.current != nil && m.current.Type == model.EntryTypeBinary {
+		help = "s save to file · " + help
+	}
+	sb.WriteString(helpStyle.Render(help))
 	return sb.String()
+}
+
+// downloadCmd streams the payload of the entry into the file at path
+// in the background.
+func downloadCmd(entries entryClient, id, path string) tea.Cmd {
+	return func() tea.Msg {
+		file, err := os.Create(path)
+		if err != nil {
+			return downloadedMsg{path: path, err: err}
+		}
+		err = entries.Download(context.Background(), id, file)
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			_ = os.Remove(path)
+		}
+		return downloadedMsg{path: path, err: err}
+	}
 }

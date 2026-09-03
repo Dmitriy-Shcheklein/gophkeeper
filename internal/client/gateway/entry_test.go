@@ -181,7 +181,7 @@ func TestList(t *testing.T) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})
 
-	got, err := g.List(context.Background())
+	got, err := g.List(context.Background(), true)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestListEmpty(t *testing.T) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})
 
-	got, err := g.List(context.Background())
+	got, err := g.List(context.Background(), true)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestSync(t *testing.T) {
 	})
 	g.SetToken("tok-9")
 
-	got, err := g.Sync(context.Background())
+	got, err := g.Sync(context.Background(), true)
 	if err != nil {
 		t.Fatalf("Sync: %v", err)
 	}

@@ -137,7 +137,7 @@ func (m appModel) viewList() string {
 
 	for i := m.offset; i < end; i++ {
 		e := m.visible[i]
-		row := fmt.Sprintf("  %-8s%-24s v%-4d", render.TypeLabel(e.Type), truncate(e.Label, 24), e.Version)
+		row := fmt.Sprintf("  %-8s%-24s v%-4d%9s", render.TypeLabel(e.Type), truncate(e.Label, 24), e.Version, render.SizeLabel(e.DataSize))
 		if i == m.cursor {
 			sb.WriteString(selectedStyle.Render("> "+row) + "\n")
 		} else {

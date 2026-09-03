@@ -35,6 +35,11 @@ message GetEntryResponse {
 // ListEntriesRequest asks for all entries of the authenticated user.
 message ListEntriesRequest {
   // Currently no filters; reserved for future pagination.
+  // include_data controls whether entry payloads are carried in the
+  // response. By default it is false: entries come with metadata and
+  // data_size only, and the content is fetched with DownloadEntryData
+  // on demand. This keeps List usable with large binary entries.
+  bool include_data = 1;
 }
 
 // ListEntriesResponse returns all entries of the user.
@@ -67,10 +72,97 @@ message DeleteEntryResponse {
   // Empty for now; reserved for future use.
 }
 
+// UploadEntryHeader is the first message of an UploadEntry stream: it
+// describes the entry being stored before any payload chunks follow.
+message UploadEntryHeader {
+  // entry carries type, label and metadata. id, version and
+  // timestamps are ignored by the server; data must be empty — the
+  // payload arrives as chunks.
+  Entry entry = 1;
+  // expected_version is the optimistic-locking version the upload is
+  // based on: 0 creates a new entry, a positive value updates the
+  // existing one and fails with FailedPrecondition when stale.
+  int64 expected_version = 2;
+}
+
+// UploadEntryChunk carries one piece of the payload. The server
+// concatenates chunks in the order they are sent.
+message UploadEntryChunk {
+  // data is a piece of the payload.
+  bytes data = 1;
+}
+
+// UploadEntryFooter is the last message of an UploadEntry stream. The
+// server verifies that the digest matches the payload it received and
+// rejects the whole upload on mismatch.
+message UploadEntryFooter {
+  // sha256 is the hex-encoded SHA-256 digest of the full payload.
+  string sha256 = 1;
+}
+
+// UploadEntryRequest is a single message of the UploadEntry stream:
+// the first message must be a header, the last one a footer, all
+// messages in between are chunks.
+message UploadEntryRequest {
+  oneof payload {
+    // header starts the upload and describes the entry.
+    UploadEntryHeader header = 1;
+    // chunk is one piece of the entry payload.
+    UploadEntryChunk chunk = 2;
+    // footer ends the upload with the payload digest.
+    UploadEntryFooter footer = 3;
+  }
+}
+
+// UploadEntryResponse returns the stored entry as seen by the server.
+message UploadEntryResponse {
+  // entry includes the server-assigned id, version and timestamps.
+  // data is empty; use DownloadEntryData to fetch the content.
+  Entry entry = 1;
+}
+
+// DownloadEntryDataRequest identifies an entry whose payload should
+// be streamed.
+message DownloadEntryDataRequest {
+  // id is the entry identifier.
+  string id = 1;
+}
+
+// DownloadEntryDataHeader is the first message of the
+// DownloadEntryData stream: it reports the payload size before the
+// chunks follow.
+message DownloadEntryDataHeader {
+  // size is the total payload size in bytes.
+  int64 size = 1;
+}
+
+// DataChunk carries one piece of an entry payload.
+message DataChunk {
+  // data is a piece of the payload.
+  bytes data = 1;
+}
+
+// DownloadEntryDataResponse is a single message of the
+// DownloadEntryData stream: the first message is a header, all
+// following messages chunks.
+message DownloadEntryDataResponse {
+  oneof payload {
+    // header reports the total payload size.
+    DownloadEntryDataHeader header = 1;
+    // chunk is one piece of the entry payload.
+    DataChunk chunk = 2;
+  }
+}
+
 // SyncRequest asks for the current state of all entries of the
 // authenticated user.
 message SyncRequest {
-  // Empty; the user is identified by the JWT in request metadata.
+  // The user is identified by the JWT in request metadata.
+  // include_data controls whether entry payloads are carried in the
+  // response (see ListEntriesRequest.include_data). Default false:
+  // Sync returns metadata and data_size only, so it stays cheap even
+  // with large binary entries.
+  bool include_data = 1;
 }
 
 // SyncResponse carries the full current list of the user's entries,
@@ -96,4 +188,16 @@ service EntryService {
   // allowing several authorized clients of the same owner to converge
   // on the same server state.
   rpc Sync(SyncRequest) returns (SyncResponse);
+  // Upload stores an entry streamed as chunks (client-streaming):
+  // the first message is an UploadEntryHeader, the rest are payload
+  // chunks. It supports both creating a new entry (expected_version 0)
+  // and replacing the payload of an existing one guarded by
+  // optimistic locking. The whole upload is atomic: the entry becomes
+  // visible only after the stream completes successfully.
+  rpc Upload(stream UploadEntryRequest) returns (UploadEntryResponse);
+  // DownloadEntryData streams the payload of a single entry
+  // (server-streaming): the first message is a header with the total
+  // size, the rest are payload chunks.
+  rpc DownloadEntryData(DownloadEntryDataRequest)
+      returns (stream DownloadEntryDataResponse);
 }

@@ -175,7 +175,12 @@ type Entry struct {
 	// created_at is the entry creation timestamp, Unix seconds (UTC).
 	CreatedAt int64 `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// updated_at is the last modification timestamp, Unix seconds (UTC).
-	UpdatedAt     int64 `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	UpdatedAt int64 `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// data_size is the server-reported size of the entry payload in bytes.
+	// It is populated even when data itself is omitted (see
+	// ListEntriesRequest.include_data and SyncRequest.include_data), so
+	// clients can show sizes and decide whether to download the content.
+	DataSize      int64 `protobuf:"varint,9,opt,name=data_size,json=dataSize,proto3" json:"data_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -266,6 +271,13 @@ func (x *Entry) GetUpdatedAt() int64 {
 	return 0
 }
 
+func (x *Entry) GetDataSize() int64 {
+	if x != nil {
+		return x.DataSize
+	}
+	return 0
+}
+
 var File_gophkeeper_v1_models_proto protoreflect.FileDescriptor
 
 const file_gophkeeper_v1_models_proto_rawDesc = "" +
@@ -275,7 +287,7 @@ const file_gophkeeper_v1_models_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05login\x18\x02 \x01(\tR\x05login\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x03 \x01(\x03R\tcreatedAt\"\xe3\x01\n" +
+	"created_at\x18\x03 \x01(\x03R\tcreatedAt\"\x80\x02\n" +
 	"\x05Entry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x18.gophkeeper.v1.EntryTypeR\x04type\x12\x14\n" +
@@ -286,7 +298,8 @@ const file_gophkeeper_v1_models_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\b \x01(\x03R\tupdatedAt*\x87\x01\n" +
+	"updated_at\x18\b \x01(\x03R\tupdatedAt\x12\x1b\n" +
+	"\tdata_size\x18\t \x01(\x03R\bdataSize*\x87\x01\n" +
 	"\tEntryType\x12\x1a\n" +
 	"\x16ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19ENTRY_TYPE_LOGIN_PASSWORD\x10\x01\x12\x13\n" +

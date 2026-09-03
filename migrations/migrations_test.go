@@ -16,6 +16,8 @@ var wantFiles = []string{
 	"000001_create_users.up.sql",
 	"000002_create_entries.down.sql",
 	"000002_create_entries.up.sql",
+	"000003_entry_chunks.down.sql",
+	"000003_entry_chunks.up.sql",
 }
 
 func TestFSContainsExpectedMigrations(t *testing.T) {

@@ -129,7 +129,7 @@ func TestEntryRepository_List(t *testing.T) {
 	})
 
 	// Without a type filter: all of the user's entries in creation order.
-	all, err := entries.List(t.Context(), user.ID, nil)
+	all, err := entries.List(t.Context(), user.ID, nil, true)
 	require.NoError(t, err)
 	require.Len(t, all, 3)
 	assert.Equal(t, []string{pw.ID, note.ID, card.ID},
@@ -137,19 +137,19 @@ func TestEntryRepository_List(t *testing.T) {
 
 	// With a type filter: only entries of the requested type.
 	textType := model.EntryTypeText
-	filtered, err := entries.List(t.Context(), user.ID, &textType)
+	filtered, err := entries.List(t.Context(), user.ID, &textType, true)
 	require.NoError(t, err)
 	require.Len(t, filtered, 1)
 	assert.Equal(t, note.ID, filtered[0].ID)
 
 	// Another user sees none of the owner's entries.
-	foreign, err := entries.List(t.Context(), stranger.ID, nil)
+	foreign, err := entries.List(t.Context(), stranger.ID, nil, true)
 	require.NoError(t, err)
 	require.Len(t, foreign, 1)
 	assert.Equal(t, "foreign", foreign[0].Label)
 
 	// Unknown user has an empty list, not an error.
-	none, err := entries.List(t.Context(), missingUUID(t), nil)
+	none, err := entries.List(t.Context(), missingUUID(t), nil, true)
 	require.NoError(t, err)
 	assert.Empty(t, none)
 }

@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -68,10 +71,13 @@ type fakeEntries struct {
 	removed      []string
 	synced       int
 
-	addErr    error
-	editErr   error
-	removeErr error
-	syncErr   error
+	addErr      error
+	editErr     error
+	removeErr   error
+	syncErr     error
+	downloadErr error
+
+	downloaded []string
 }
 
 func newFakeEntries(entries ...*model.Entry) *fakeEntries {
@@ -144,6 +150,53 @@ func (f *fakeEntries) Sync(context.Context) ([]*model.Entry, error) {
 	}
 	f.synced++
 	return f.all(), nil
+}
+
+func (f *fakeEntries) Download(_ context.Context, id string, w io.Writer) error {
+	if f.downloadErr != nil {
+		return f.downloadErr
+	}
+	entry, ok := f.entries[id]
+	if !ok {
+		return gateway.ErrNotFound
+	}
+	payload := entry.Data
+	if len(payload) == 0 && entry.DataSize > 0 {
+		payload = make([]byte, entry.DataSize)
+	}
+	_, err := w.Write(payload)
+	f.downloaded = append(f.downloaded, id)
+	return err
+}
+
+func (f *fakeEntries) Upload(_ context.Context, entry *model.Entry, expectedVersion int64, r io.Reader) (*model.Entry, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	uploaded := *entry
+	uploaded.Data = data
+	uploaded.DataSize = int64(len(data))
+	if expectedVersion > 0 {
+		stored, ok := f.entries[entry.ID]
+		if !ok {
+			return nil, gateway.ErrNotFound
+		}
+		uploaded.Version = stored.Version + 1
+		uploaded.CreatedAt = stored.CreatedAt
+		f.entries[entry.ID] = &uploaded
+		f.edited = append(f.edited, &uploaded)
+		return &uploaded, nil
+	}
+	uploaded.ID = fmt.Sprintf("entry-%03d", f.nextID)
+	f.nextID++
+	uploaded.Version = 1
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	uploaded.CreatedAt = now
+	uploaded.UpdatedAt = now
+	f.entries[uploaded.ID] = &uploaded
+	f.added = append(f.added, &uploaded)
+	return &uploaded, nil
 }
 
 // all returns the stored entries in id order for deterministic
@@ -696,7 +749,7 @@ func TestBuildEntryPerType(t *testing.T) {
 	loginSrc.fields[0].input.SetValue("site")
 	loginSrc.fields[2].input.SetValue("u")
 	loginSrc.fields[3].input.SetValue("p")
-	entry, err := loginSrc.buildEntry()
+	entry, _, err := loginSrc.buildEntry()
 	require.NoError(t, err)
 	require.Equal(t, model.EntryTypeLoginPassword, entry.Type)
 	login, err := render.DecodeLogin(entry.Data)
@@ -707,12 +760,12 @@ func TestBuildEntryPerType(t *testing.T) {
 	card := newForm()
 	card.cycleType(3)
 	card.fields[0].input.SetValue("bank")
-	_, err = card.buildEntry()
+	_, _, err = card.buildEntry()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "card number")
 
 	card.fields[2].input.SetValue("4111111111111111")
-	entry, err = card.buildEntry()
+	entry, _, err = card.buildEntry()
 	require.NoError(t, err)
 	got, err := render.DecodeCard(entry.Data)
 	require.NoError(t, err)
@@ -721,12 +774,12 @@ func TestBuildEntryPerType(t *testing.T) {
 	// Binary (new): label and path are required.
 	bin := newForm()
 	bin.cycleType(2)
-	_, err = bin.buildEntry()
+	_, _, err = bin.buildEntry()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "label must not be empty")
 
 	bin.fields[0].input.SetValue("file")
-	_, err = bin.buildEntry()
+	_, _, err = bin.buildEntry()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "file path")
 
@@ -736,7 +789,7 @@ func TestBuildEntryPerType(t *testing.T) {
 		Data: []byte("stored"), Version: 4,
 	}
 	editBin := newFormForEdit(src)
-	entry, err = editBin.buildEntry()
+	entry, _, err = editBin.buildEntry()
 	require.NoError(t, err)
 	require.Equal(t, []byte("stored"), entry.Data)
 	require.Equal(t, int64(4), entry.Version)
@@ -845,4 +898,100 @@ func TestAuthEscQuits(t *testing.T) {
 	m := newAppModel(&fakeAuth{}, newFakeEntries())
 	m = send(m, "esc").(appModel)
 	require.True(t, m.quitting)
+}
+
+func TestSaveToFileScreenFlow(t *testing.T) {
+	entries := newFakeEntries(&model.Entry{
+		ID: "e-bin", Type: model.EntryTypeBinary, Label: "movie.bin",
+		Data: []byte("payload"), DataSize: 7, Version: 1,
+	})
+	m := load(t, newAppModel(authed(), entries), entries)
+
+	// Open the detail of the binary entry, then press s.
+	m = send(m, "enter").(appModel)
+	require.Equal(t, screenDetail, m.topScreen())
+	require.Contains(t, m.View(), "s save to file")
+
+	m = send(m, "s").(appModel)
+	require.Equal(t, screenSave, m.topScreen())
+	require.Contains(t, m.View(), "Save binary payload")
+
+	// Empty path is rejected in-screen.
+	m = send(m, "enter").(appModel)
+	require.Equal(t, screenSave, m.topScreen())
+	require.Contains(t, m.View(), "path must not be empty")
+
+	// A path starts the streaming download; success pops back to the
+	// detail screen with a status message.
+	m = send(m, "o", "u", "t", ".", "b", "i", "n").(appModel)
+	updated, cmd := m.updateSave(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(appModel)
+	require.NotNil(t, cmd)
+	up, _ := run(m, cmd)
+	m = up.(appModel)
+	require.Equal(t, screenDetail, m.topScreen())
+	require.Contains(t, m.status, "saved to out.bin")
+	require.Equal(t, []string{"e-bin"}, entries.downloaded)
+}
+
+func TestSaveToFileScreenOnlyForBinary(t *testing.T) {
+	entries := newFakeEntries(&model.Entry{
+		ID: "e-txt", Type: model.EntryTypeText, Label: "note",
+		Data: []byte("hello"), Version: 1,
+	})
+	m := load(t, newAppModel(authed(), entries), entries)
+
+	m = send(m, "enter").(appModel)
+	require.Equal(t, screenDetail, m.topScreen())
+	// No save action for text entries.
+	require.NotContains(t, m.View(), "s save to file")
+	m = send(m, "s").(appModel)
+	require.Equal(t, screenDetail, m.topScreen())
+}
+
+func TestListShowsBinarySizeWithoutPayload(t *testing.T) {
+	entries := newFakeEntries(&model.Entry{
+		ID: "e1", Type: model.EntryTypeBinary, Label: "big.bin",
+		DataSize: 1536, Version: 1, // no Data: synced without payload
+	})
+	m := load(t, newAppModel(authed(), entries), entries)
+
+	view := m.View()
+	require.Contains(t, view, "big.bin")
+	require.Contains(t, view, "1.5 KB")
+}
+
+func TestFormBinaryWithFilePathStreamsUpload(t *testing.T) {
+	// Editing a binary entry with a new path must go through the
+	// streaming upload (expectedVersion = the source version), not
+	// read the file into memory.
+	payload := "small-file-content"
+	path := filepath.Join(t.TempDir(), "new.bin")
+	require.NoError(t, os.WriteFile(path, []byte(payload), 0o600))
+
+	src := &model.Entry{
+		ID: "e-bin", Type: model.EntryTypeBinary, Label: "old.bin",
+		Data: []byte("old-content"), DataSize: 11, Version: 3,
+	}
+	entries := newFakeEntries(src)
+	m := load(t, newAppModel(authed(), entries), entries)
+	m = send(m, "enter").(appModel) // detail
+	m = send(m, "e").(appModel)     // edit form
+	require.Equal(t, screenForm, m.topScreen())
+
+	// Fill the file path field (label and metadata are pre-filled).
+	m.form.fields[2].input.SetValue(path)
+	updated, cmd := m.trySave()
+	m = updated.(appModel)
+	require.NotNil(t, cmd)
+	up, _ := run(m, cmd)
+	m = up.(appModel)
+
+	// The upload succeeded: form closed, entry stored with the new
+	// content and a bumped version.
+	require.Equal(t, screenDetail, m.topScreen())
+	stored := entries.entries["e-bin"]
+	require.Equal(t, []byte(payload), stored.Data)
+	require.Equal(t, int64(len(payload)), stored.DataSize)
+	require.Equal(t, int64(4), stored.Version)
 }

@@ -79,12 +79,42 @@ func New(target string, tokenStore *token.Store) (*Gateway, error) {
 }
 
 // dialOptions returns the connection options, including the token
-// injection interceptor bound to this Gateway.
+// injection interceptors bound to this Gateway (both unary and
+// streaming RPCs) and the raised message size limits matching the
+// server's default maximum payload size.
 func (g *Gateway) dialOptions() []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(g.injectToken),
+		grpc.WithStreamInterceptor(g.injectTokenStream),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallSendMsgSize(defaultMaxMsgSize),
+			grpc.MaxCallRecvMsgSize(defaultMaxMsgSize),
+		),
 	}
+}
+
+// defaultMaxMsgSize is the client-side gRPC message size cap (1 GiB
+// plus headroom): it matches the server's default maximum payload
+// size so unary calls with large payloads are not silently rejected
+// by the client transport before reaching the server.
+const defaultMaxMsgSize = 1<<30 + 1<<20
+
+// injectTokenStream is the streaming counterpart of injectToken: it
+// attaches the "authorization: Bearer <token>" metadata to every
+// outgoing streaming RPC when a token is set.
+func (g *Gateway) injectTokenStream(
+	ctx context.Context,
+	desc *grpc.StreamDesc,
+	cc *grpc.ClientConn,
+	method string,
+	streamer grpc.Streamer,
+	opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	if tok := g.Token(); tok != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, authorizationHeader, bearerPrefix+tok)
+	}
+	return streamer(ctx, desc, cc, method, opts...)
 }
 
 // init finishes Gateway construction on an established connection.

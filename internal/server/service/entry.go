@@ -68,12 +68,25 @@ const (
 // Update only validates and applies label, metadata and data.
 type EntryService struct {
 	entries repository.EntryRepository
+	// maxDataSize caps the accepted payload size, both for unary
+	// Create/Update and for chunked uploads.
+	maxDataSize int64
 }
 
 // NewEntryService creates an EntryService backed by the given entry
-// repository.
+// repository with the default payload size limit (DefaultMaxDataSize).
 func NewEntryService(entries repository.EntryRepository) *EntryService {
-	return &EntryService{entries: entries}
+	return &EntryService{entries: entries, maxDataSize: DefaultMaxDataSize}
+}
+
+// NewEntryServiceWithLimits creates an EntryService with an explicit
+// maximum payload size. A non-positive maxDataSize falls back to the
+// default.
+func NewEntryServiceWithLimits(entries repository.EntryRepository, maxDataSize int64) *EntryService {
+	if maxDataSize <= 0 {
+		maxDataSize = DefaultMaxDataSize
+	}
+	return &EntryService{entries: entries, maxDataSize: maxDataSize}
 }
 
 // Create validates the entry and stores it for the given user. On
@@ -89,6 +102,9 @@ func (s *EntryService) Create(ctx context.Context, userID string, entry *model.E
 	}
 
 	entry.UserID = userID
+	if int64(len(entry.Data)) > s.maxDataSize {
+		return nil, fmt.Errorf("service: create entry: %w", ErrDataTooLarge)
+	}
 	if err := s.entries.Create(ctx, entry); err != nil {
 		return nil, fmt.Errorf("service: create entry: %w", err)
 	}
@@ -113,9 +129,11 @@ func (s *EntryService) Get(ctx context.Context, userID, entryID string) (*model.
 }
 
 // List returns the entries of the given user, optionally filtered by
-// type. A non-nil filter must be a valid model.EntryType. Repository
-// errors are propagated as-is.
-func (s *EntryService) List(ctx context.Context, userID string, entryType *model.EntryType) ([]*model.Entry, error) {
+// type. A non-nil filter must be a valid model.EntryType. When
+// includeData is false the payloads are not loaded (Data empty,
+// DataSize populated), which keeps List cheap with large binary
+// entries. Repository errors are propagated as-is.
+func (s *EntryService) List(ctx context.Context, userID string, entryType *model.EntryType, includeData bool) ([]*model.Entry, error) {
 	if err := validateUserID(userID); err != nil {
 		return nil, err
 	}
@@ -123,7 +141,7 @@ func (s *EntryService) List(ctx context.Context, userID string, entryType *model
 		return nil, ErrInvalidEntryType
 	}
 
-	entries, err := s.entries.List(ctx, userID, entryType)
+	entries, err := s.entries.List(ctx, userID, entryType, includeData)
 	if err != nil {
 		return nil, fmt.Errorf("service: list entries: %w", err)
 	}
@@ -157,6 +175,9 @@ func (s *EntryService) Update(ctx context.Context, userID string, entry *model.E
 	}
 
 	entry.UserID = userID
+	if int64(len(entry.Data)) > s.maxDataSize {
+		return nil, fmt.Errorf("service: update entry: %w", ErrDataTooLarge)
+	}
 	if err := s.entries.Update(ctx, entry); err != nil {
 		return nil, fmt.Errorf("service: update entry: %w", err)
 	}
@@ -181,9 +202,54 @@ func (s *EntryService) Delete(ctx context.Context, userID, entryID string) error
 
 // Sync returns the full entry state of the given user (all types,
 // ordered by creation time), used by the transport-level Sync RPC to
-// reconcile client copies.
-func (s *EntryService) Sync(ctx context.Context, userID string) ([]*model.Entry, error) {
-	return s.List(ctx, userID, nil)
+// reconcile client copies. Payloads are only included when includeData
+// is set.
+func (s *EntryService) Sync(ctx context.Context, userID string, includeData bool) ([]*model.Entry, error) {
+	return s.List(ctx, userID, nil, includeData)
+}
+
+// EntryDataInfo describes the payload layout of a ready entry for the
+// download streaming path: chunkCount is the number of stored chunks
+// (0 means the payload is inline in entry.Data) and size is the total
+// payload size in bytes. model.ErrNotFound when the entry does not
+// exist.
+func (s *EntryService) EntryDataInfo(ctx context.Context, userID, entryID string) (chunkCount int, size int64, err error) {
+	if err := validateUserID(userID); err != nil {
+		return 0, 0, err
+	}
+	if entryID == "" {
+		return 0, 0, ErrEmptyEntryID
+	}
+	entry, err := s.entries.GetByID(ctx, userID, entryID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("service: entry data info: %w", err)
+	}
+	if entry.DataSize == 0 && len(entry.Data) > 0 {
+		size = int64(len(entry.Data))
+	} else {
+		size = entry.DataSize
+	}
+	if size == 0 {
+		return 0, 0, ErrEmptyData
+	}
+	count, err := s.entries.ChunkCount(ctx, userID, entryID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("service: entry data info: %w", err)
+	}
+	return count, size, nil
+}
+
+// DownloadChunk returns one stored payload chunk of a ready entry.
+// model.ErrNotFound when there is no such chunk.
+func (s *EntryService) DownloadChunk(ctx context.Context, userID, entryID string, seq int) ([]byte, error) {
+	if err := validateUserID(userID); err != nil {
+		return nil, err
+	}
+	data, err := s.entries.Chunk(ctx, userID, entryID, seq)
+	if err != nil {
+		return nil, fmt.Errorf("service: download chunk: %w", err)
+	}
+	return data, nil
 }
 
 // validateUserID enforces the non-empty user identifier.

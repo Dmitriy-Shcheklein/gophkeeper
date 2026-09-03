@@ -224,12 +224,16 @@ func (f formModel) value(i int) string {
 	return ""
 }
 
-// buildEntry validates the form and assembles the entry to save. On
-// validation failure it returns a nil entry and a user-facing error.
-func (f formModel) buildEntry() (*model.Entry, error) {
+// buildEntry validates the form and assembles the entry to save.
+// Binary payloads are not read here: when a file path is given, the
+// returned entry has empty Data and filePath is that path — the caller
+// streams the file to the server instead of loading it into memory.
+// On validation failure it returns a nil entry and a user-facing
+// error.
+func (f formModel) buildEntry() (*model.Entry, string, error) {
 	label := strings.TrimSpace(f.value(0))
 	if label == "" {
-		return nil, fmt.Errorf("label must not be empty")
+		return nil, "", fmt.Errorf("label must not be empty")
 	}
 	metadata := f.value(1)
 
@@ -242,51 +246,55 @@ func (f formModel) buildEntry() (*model.Entry, error) {
 	}
 
 	var data []byte
+	binaryPath := ""
 	var err error
 	switch entry.Type {
 	case model.EntryTypeLoginPassword:
 		username, password := f.value(2), f.value(3)
 		if username == "" || password == "" {
-			return nil, fmt.Errorf("username and password must not be empty")
+			return nil, "", fmt.Errorf("username and password must not be empty")
 		}
 		if data, err = render.EncodeLogin(username, password); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	case model.EntryTypeText:
 		text := f.value(2)
 		if text == "" {
-			return nil, fmt.Errorf("text must not be empty")
+			return nil, "", fmt.Errorf("text must not be empty")
 		}
 		data = []byte(text)
 	case model.EntryTypeBinary:
 		path := strings.TrimSpace(f.value(2))
 		if path == "" {
 			if f.isNew {
-				return nil, fmt.Errorf("file path must not be empty")
+				return nil, "", fmt.Errorf("file path must not be empty")
 			}
 			// Editing without a new path keeps the stored content.
 			data = f.source.Data
 		} else {
-			if data, err = os.ReadFile(path); err != nil {
-				return nil, fmt.Errorf("read file: %w", err)
+			info, statErr := os.Stat(path)
+			if statErr != nil {
+				return nil, "", fmt.Errorf("read file: %w", statErr)
 			}
-			if len(data) == 0 {
-				return nil, fmt.Errorf("file is empty")
+			if info.Size() == 0 {
+				return nil, "", fmt.Errorf("file is empty")
 			}
+			// Stream the file on save; do not read it into memory.
+			binaryPath = path
 		}
 	case model.EntryTypeCard:
 		number := strings.TrimSpace(f.value(2))
 		if number == "" {
-			return nil, fmt.Errorf("card number must not be empty")
+			return nil, "", fmt.Errorf("card number must not be empty")
 		}
 		if data, err = render.EncodeCard(number, f.value(3), f.value(4), f.value(5)); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	default:
-		return nil, fmt.Errorf("unsupported entry type")
+		return nil, "", fmt.Errorf("unsupported entry type")
 	}
 	entry.Data = data
-	return entry, nil
+	return entry, binaryPath, nil
 }
 
 // cloneEntry returns a shallow copy of e; Data is shared until the
@@ -362,15 +370,24 @@ func (m appModel) feedInput(msg tea.KeyMsg) (formModel, tea.Cmd) {
 }
 
 // trySave validates the form and, when it passes, issues the async
-// save command; validation errors are shown inside the form.
+// save command; validation errors are shown inside the form. Binary
+// entries with a file path go through the streaming upload instead.
 func (m appModel) trySave() (tea.Model, tea.Cmd) {
-	entry, err := m.form.buildEntry()
+	entry, binaryPath, err := m.form.buildEntry()
 	if err != nil {
 		m.form.err = err.Error()
 		return m, nil
 	}
 	m.form.err = ""
 	m.loading = true
+
+	if binaryPath != "" {
+		version := int64(0)
+		if !m.form.isNew && m.form.source != nil {
+			version = m.form.source.Version
+		}
+		return m, uploadCmd(m.entries, entry, version, binaryPath)
+	}
 	return m, saveCmd(m.entries, entry, m.form.isNew)
 }
 

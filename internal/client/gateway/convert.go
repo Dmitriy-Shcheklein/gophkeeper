@@ -102,6 +102,7 @@ func entryFromProto(e *v1.Entry) *model.Entry {
 		Label:     e.GetLabel(),
 		Metadata:  e.GetMetadata(),
 		Data:      e.GetData(),
+		DataSize:  e.GetDataSize(),
 		Version:   e.GetVersion(),
 		CreatedAt: time.Unix(e.GetCreatedAt(), 0).UTC(),
 		UpdatedAt: time.Unix(e.GetUpdatedAt(), 0).UTC(),

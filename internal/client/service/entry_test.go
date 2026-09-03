@@ -31,6 +31,14 @@ type fakeEntryGateway struct {
 	lastUpdate *model.Entry
 	lastGetID  string
 	lastDelID  string
+
+	lastListIncludeData bool
+	lastSyncIncludeData bool
+
+	uploadErr      error
+	uploadStream   gateway.UploadStream
+	downloadErr    error
+	downloadStream gateway.DownloadStream
 }
 
 func (f *fakeEntryGateway) Create(_ context.Context, entry *model.Entry) (*model.Entry, error) {
@@ -49,10 +57,11 @@ func (f *fakeEntryGateway) Get(_ context.Context, id string) (*model.Entry, erro
 	return f.getOut, nil
 }
 
-func (f *fakeEntryGateway) List(context.Context) ([]*model.Entry, error) {
+func (f *fakeEntryGateway) List(_ context.Context, includeData bool) ([]*model.Entry, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
+	f.lastListIncludeData = includeData
 	return f.listOut, nil
 }
 
@@ -72,11 +81,26 @@ func (f *fakeEntryGateway) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeEntryGateway) Sync(context.Context) ([]*model.Entry, error) {
+func (f *fakeEntryGateway) Sync(_ context.Context, includeData bool) ([]*model.Entry, error) {
 	if f.syncErr != nil {
 		return nil, f.syncErr
 	}
+	f.lastSyncIncludeData = includeData
 	return f.syncOut, nil
+}
+
+func (f *fakeEntryGateway) Upload(context.Context) (gateway.UploadStream, error) {
+	if f.uploadErr != nil {
+		return nil, f.uploadErr
+	}
+	return f.uploadStream, nil
+}
+
+func (f *fakeEntryGateway) DownloadEntryData(context.Context, string) (gateway.DownloadStream, error) {
+	if f.downloadErr != nil {
+		return nil, f.downloadErr
+	}
+	return f.downloadStream, nil
 }
 
 // validEntry returns an entry passing all validation rules.

@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,6 +36,8 @@ const (
 	EnvJWTTTL = "JWT_TTL"
 	// EnvLogLevel holds the slog level name.
 	EnvLogLevel = "LOG_LEVEL"
+	// EnvMaxDataSize holds the maximum entry payload size in bytes.
+	EnvMaxDataSize = "MAX_DATA_SIZE"
 )
 
 // Default flag values.
@@ -50,6 +53,10 @@ const (
 	// DefaultLogLevel is the slog level used when neither the
 	// LOG_LEVEL environment variable nor the --log-level flag is set.
 	DefaultLogLevel = slog.LevelInfo
+	// DefaultMaxDataSize is the maximum accepted entry payload size
+	// (1 GiB) used when neither the MAX_DATA_SIZE environment variable
+	// nor the --max-data-size flag is set.
+	DefaultMaxDataSize = int64(1 << 30)
 )
 
 // Config is the fully resolved server configuration. Use Load to
@@ -70,6 +77,9 @@ type Config struct {
 	JWTTTL time.Duration
 	// LogLevel is the minimum slog level for server logs.
 	LogLevel slog.Level
+	// MaxDataSize is the maximum accepted entry payload size in bytes,
+	// enforced on both the unary and the streaming upload paths.
+	MaxDataSize int64
 }
 
 // ErrHelp is returned by Load when the -h or --help flag is requested.
@@ -101,11 +111,12 @@ func Load(args []string) (*Config, error) {
 	}
 
 	var (
-		address  = fs.String("address", envString(EnvGRPCAddress, DefaultAddress), "gRPC listen address ($"+EnvGRPCAddress+")")
-		dsn      = fs.String("dsn", os.Getenv(EnvDSN), "PostgreSQL connection URL, required ($"+EnvDSN+")")
-		secret   = fs.String("jwt-secret", os.Getenv(EnvJWTSecret), "JWT signing secret, required ($"+EnvJWTSecret+")")
-		ttl      = fs.String("jwt-ttl", envString(EnvJWTTTL, DefaultJWTTTL.String()), "access token lifetime, Go duration ($"+EnvJWTTTL+")")
-		logLevel = fs.String("log-level", envLevelName(DefaultLogLevel), "log level: debug, info, warn or error ($"+EnvLogLevel+")")
+		address     = fs.String("address", envString(EnvGRPCAddress, DefaultAddress), "gRPC listen address ($"+EnvGRPCAddress+")")
+		dsn         = fs.String("dsn", os.Getenv(EnvDSN), "PostgreSQL connection URL, required ($"+EnvDSN+")")
+		secret      = fs.String("jwt-secret", os.Getenv(EnvJWTSecret), "JWT signing secret, required ($"+EnvJWTSecret+")")
+		ttl         = fs.String("jwt-ttl", envString(EnvJWTTTL, DefaultJWTTTL.String()), "access token lifetime, Go duration ($"+EnvJWTTTL+")")
+		logLevel    = fs.String("log-level", envLevelName(DefaultLogLevel), "log level: debug, info, warn or error ($"+EnvLogLevel+")")
+		maxDataSize = fs.Int64("max-data-size", envInt64(EnvMaxDataSize, DefaultMaxDataSize), "maximum entry payload size in bytes ($"+EnvMaxDataSize+")")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -137,13 +148,17 @@ func Load(args []string) (*Config, error) {
 	if *secret == "" {
 		return nil, fmt.Errorf("config: --jwt-secret (or $%s) is required", EnvJWTSecret)
 	}
+	if *maxDataSize <= 0 {
+		return nil, fmt.Errorf("config: --max-data-size (or $%s) must be positive", EnvMaxDataSize)
+	}
 
 	return &Config{
-		Address:   *address,
-		DSN:       *dsn,
-		JWTSecret: *secret,
-		JWTTTL:    tokenTTL,
-		LogLevel:  level,
+		Address:     *address,
+		DSN:         *dsn,
+		JWTSecret:   *secret,
+		JWTTTL:      tokenTTL,
+		LogLevel:    level,
+		MaxDataSize: *maxDataSize,
 	}, nil
 }
 
@@ -173,6 +188,17 @@ func valueSource(fs *flag.FlagSet, flagName, envName string) string {
 func envString(name, fallback string) string {
 	if value := os.Getenv(name); value != "" {
 		return value
+	}
+	return fallback
+}
+
+// envInt64 returns the integer value of the environment variable name,
+// or fallback when it is unset, empty or unparsable.
+func envInt64(name string, fallback int64) int64 {
+	if value := os.Getenv(name); value != "" {
+		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return n
+		}
 	}
 	return fallback
 }

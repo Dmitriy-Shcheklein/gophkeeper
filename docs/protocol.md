@@ -16,7 +16,9 @@ Swagger/OpenAPI не предоставляется: gRPC-сервисы не и
 
 ## Общие положения
 
-- Все RPC — унарные (request/response), потоковой передачи нет.
+- Основные RPC — унарные (request/response); для больших бинарных payload'ов
+  есть потоковые `Upload` (client-streaming) и `DownloadEntryData`
+  (server-streaming), см. ниже.
 - Ошибки передаются стандартными gRPC-статусами (`google.rpc` не используется);
   человекочитаемое сообщение — в `status.message`.
 - Время — Unix-секунды UTC (`int64`).
@@ -57,11 +59,33 @@ authorization: Bearer <access_token>
 | RPC      | Запрос                | Ответ                 | Описание                                        |
 |----------|-----------------------|-----------------------|-------------------------------------------------|
 | `Create` | `CreateEntryRequest`  | `CreateEntryResponse` | сохраняет запись; сервер игнорирует `id`, `version`, таймстампы |
-| `Get`    | `GetEntryRequest`     | `GetEntryResponse`    | возвращает запись по `id`                       |
-| `List`   | `ListEntriesRequest`  | `ListEntriesResponse` | все записи пользователя (без фильтров и пагинации); гарантированный порядок — по `created_at, id` |
+| `Get`    | `GetEntryRequest`     | `GetEntryResponse`    | возвращает запись по `id` (для chunked-записей payload не переносится) |
+| `List`   | `ListEntriesRequest`  | `ListEntriesResponse` | все записи пользователя; `include_data` (по умолчанию `false`) управляет переносом payload'ов; порядок — по `created_at, id` |
 | `Update` | `UpdateEntryRequest`  | `UpdateEntryResponse` | заменяет содержимое; требует `id` и актуальную `version` (оптимистичная блокировка) |
 | `Delete` | `DeleteEntryRequest`  | `DeleteEntryResponse` | удаляет запись по `id`                          |
-| `Sync`   | `SyncRequest`         | `SyncResponse`        | полный текущий список записей пользователя (сверка состояния нескольких клиентов) |
+| `Sync`   | `SyncRequest`         | `SyncResponse`        | полный текущий список записей пользователя (`include_data` — как у `List`) |
+| `Upload` | stream `UploadEntryRequest` | `UploadEntryResponse` | потоковая загрузка записи чанками (см. ниже) |
+| `DownloadEntryData` | `DownloadEntryDataRequest` | stream `DownloadEntryDataResponse` | потоковое скачивание payload'а записи (см. ниже) |
+
+### Потоковая загрузка и скачивание больших payload'ов
+
+Записи с большим payload'ом (файлы) хранятся на сервере чанками (таблица
+`entry_chunks`, размер чанка — 1 МиБ) и передаются потоково:
+
+- **`Upload`** (client-streaming): первое сообщение — `header`
+  (`entry` без `data` + `expected_version`: 0 — создание, >0 — обновление
+  с оптимистичной блокировкой), затем сообщения `chunk`, последнее —
+  `footer` с hex-дайджестом SHA-256 полного payload'а. Сервер проверяет
+  дайджест и размер; загрузка атомарна — запись становится видимой только
+  после успешного завершения потока, прерванная загрузка откатывается.
+- **`DownloadEntryData`** (server-streaming): первое сообщение — `header`
+  с общим размером, затем `chunk`-сообщения до конца потока.
+- `List`/`Sync` по умолчанию **не переносят payload'ы**: записи содержат
+  метаданные и `data_size`, контент скачивается по требованию через
+  `DownloadEntryData`. Для chunked-записей `Get` также возвращает пустой
+  `data` и заполненный `data_size`.
+- Максимальный размер payload'а настраивается сервером (`MAX_DATA_SIZE`
+  / `--max-data-size`, по умолчанию 1 ГиБ); превышение — `ResourceExhausted`.
 
 ### Модель данных
 
@@ -73,7 +97,8 @@ authorization: Bearer <access_token>
 | `type`      | `EntryType` | интерпретация payload'а (см. ниже)                           |
 | `label`     | string      | пользовательское имя записи (не пусто)                       |
 | `metadata`  | string      | произвольные текстовые метаданные                            |
-| `data`      | bytes       | payload записи (формат зависит от `type`)                    |
+| `data`      | bytes       | payload записи (формат зависит от `type`); пуст для chunked-записей |
+| `data_size` | int64       | общий размер payload'а в байтах; заполняется даже когда `data` не переносится |
 | `version`   | int64       | инкрементируется при каждом обновлении; для `Update` обязателен |
 | `created_at`| int64       | создание, Unix-секунды UTC                                   |
 | `updated_at`| int64       | последняя модификация, Unix-секунды UTC                      |
@@ -102,11 +127,12 @@ authorization: Bearer <access_token>
 
 | gRPC-код              | Когда возвращается                                                                 |
 |-----------------------|-------------------------------------------------------------------------------------|
-| `InvalidArgument`     | пустой/слишком длинный логин или label, слишком короткий/длинный пароль, пустые `data`, пустой id записи, неизвестный `EntryType`, `version < 1`, слишком длинные metadata |
+| `InvalidArgument`     | пустой/слишком длинный логин или label, слишком короткий/длинный пароль, пустые `data`, пустой id записи, неизвестный `EntryType`, `version < 1`, слишком длинные metadata, чанк больше 1 МиБ, несовпадение SHA-256 в `Upload`, пустой потоковый payload |
 | `Unauthenticated`     | нет заголовка `authorization`, невалидный/просроченный JWT (`authentication required`), неверный логин или пароль при `Login` |
-| `NotFound`            | запись не найдена (`Get`/`Update`/`Delete`)                                          |
+| `NotFound`            | запись не найдена (`Get`/`Update`/`Delete`/`DownloadEntryData`)                      |
 | `AlreadyExists`       | логин уже занят при `Register`                                                       |
-| `FailedPrecondition`  | конфликт версий при `Update` (entry изменён другим клиентом; нужно перечитать и повторить) |
+| `FailedPrecondition`  | конфликт версий при `Update`/`Upload` (entry изменён другим клиентом; нужно перечитать и повторить) |
+| `ResourceExhausted`   | payload превышает `MAX_DATA_SIZE` сервера                                            |
 | `Internal`            | любая непредвиденная ошибка (детали не раскрываются клиенту)                         |
 
 Также возможны стандартные коды gRPC-инфраструктуры (например, `Unavailable`,
@@ -116,7 +142,7 @@ authorization: Bearer <access_token>
 
 - Транспорт без TLS: шифрование канала — вне рамок (см. раздел «Безопасность»
   в [README](../README.md)); подключение TLS — план развития.
-- `List` возвращает все записи одним ответом: пагинация не реализована
-  (`ListEntriesRequest` оставлен под неё).
-- Все RPC унарные; инкрементальная синхронизация (`Sync` по дельте) — план
-  развития.
+- `List` возвращает все записи одним ответом (payload'ы — только с
+  `include_data`): пагинация не реализована (`ListEntriesRequest` оставлен
+  под неё).
+- Инкрементальная синхронизация (`Sync` по дельте) — план развития.

@@ -68,10 +68,20 @@ func entryToProto(e *model.Entry) *gophkeeperv1.Entry {
 		Label:     e.Label,
 		Metadata:  e.Metadata,
 		Data:      e.Data,
+		DataSize:  dataSize(e),
 		Version:   e.Version,
 		CreatedAt: e.CreatedAt.Unix(),
 		UpdatedAt: e.UpdatedAt.Unix(),
 	}
+}
+
+// dataSize reports the payload size of the entry: the inline data
+// length when present, the stored size otherwise.
+func dataSize(e *model.Entry) int64 {
+	if len(e.Data) > 0 {
+		return int64(len(e.Data))
+	}
+	return e.DataSize
 }
 
 // entriesToProto converts a slice of domain entries to its protobuf

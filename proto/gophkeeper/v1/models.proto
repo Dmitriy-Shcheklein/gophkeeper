@@ -56,4 +56,9 @@ message Entry {
   int64 created_at = 7;
   // updated_at is the last modification timestamp, Unix seconds (UTC).
   int64 updated_at = 8;
+  // data_size is the server-reported size of the entry payload in bytes.
+  // It is populated even when data itself is omitted (see
+  // ListEntriesRequest.include_data and SyncRequest.include_data), so
+  // clients can show sizes and decide whether to download the content.
+  int64 data_size = 9;
 }

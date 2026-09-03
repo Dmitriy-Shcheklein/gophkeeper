@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"testing"
@@ -81,12 +82,16 @@ type fakeEntries struct {
 	synced   int
 	getCalls []string
 
-	addErr    error
-	listErr   error
-	getErr    error
-	editErr   error
-	removeErr error
-	syncErr   error
+	addErr      error
+	listErr     error
+	getErr      error
+	editErr     error
+	removeErr   error
+	syncErr     error
+	uploadErr   error
+	downloadErr error
+
+	downloaded []string
 }
 
 func newFakeEntries(entries ...*model.Entry) *fakeEntries {
@@ -167,6 +172,55 @@ func (f *fakeEntries) Sync(_ context.Context) ([]*model.Entry, error) {
 	}
 	f.synced++
 	return f.all(), nil
+}
+
+func (f *fakeEntries) Upload(_ context.Context, entry *model.Entry, expectedVersion int64, r io.Reader) (*model.Entry, error) {
+	if f.uploadErr != nil {
+		return nil, f.uploadErr
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	uploaded := *entry
+	uploaded.Data = data
+	uploaded.DataSize = int64(len(data))
+	if expectedVersion > 0 {
+		stored, ok := f.entries[entry.ID]
+		if !ok {
+			return nil, gateway.ErrNotFound
+		}
+		uploaded.Version = stored.Version + 1
+		uploaded.CreatedAt = stored.CreatedAt
+		f.entries[entry.ID] = &uploaded
+		f.edited = append(f.edited, &uploaded)
+		return &uploaded, nil
+	}
+	uploaded.ID = fmt.Sprintf("entry-%03d", f.nextID)
+	f.nextID++
+	uploaded.Version = 1
+	uploaded.CreatedAt = time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	uploaded.UpdatedAt = uploaded.CreatedAt
+	f.entries[uploaded.ID] = &uploaded
+	f.added = append(f.added, &uploaded)
+	return &uploaded, nil
+}
+
+func (f *fakeEntries) Download(_ context.Context, id string, w io.Writer) error {
+	if f.downloadErr != nil {
+		return f.downloadErr
+	}
+	entry, ok := f.entries[id]
+	if !ok {
+		return gateway.ErrNotFound
+	}
+	payload := entry.Data
+	if len(payload) == 0 && entry.DataSize > 0 {
+		payload = make([]byte, entry.DataSize)
+	}
+	_, err := w.Write(payload)
+	f.downloaded = append(f.downloaded, id)
+	return err
 }
 
 // all returns the stored entries in id order for deterministic

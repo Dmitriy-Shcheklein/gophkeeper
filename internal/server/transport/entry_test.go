@@ -21,12 +21,15 @@ import (
 // fakeEntryService is a hand-written mock of the transport.entryService
 // interface, recording invocations and returning preset results.
 type fakeEntryService struct {
-	createFn func(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error)
-	getFn    func(ctx context.Context, userID, entryID string) (*model.Entry, error)
-	listFn   func(ctx context.Context, userID string, entryType *model.EntryType) ([]*model.Entry, error)
-	updateFn func(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error)
-	deleteFn func(ctx context.Context, userID, entryID string) error
-	syncFn   func(ctx context.Context, userID string) ([]*model.Entry, error)
+	createFn        func(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error)
+	getFn           func(ctx context.Context, userID, entryID string) (*model.Entry, error)
+	listFn          func(ctx context.Context, userID string, entryType *model.EntryType, includeData bool) ([]*model.Entry, error)
+	updateFn        func(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error)
+	deleteFn        func(ctx context.Context, userID, entryID string) error
+	syncFn          func(ctx context.Context, userID string, includeData bool) ([]*model.Entry, error)
+	beginUploadFn   func(ctx context.Context, userID string, header *model.Entry, expectedVersion int64) (service.UploadSession, error)
+	dataInfoFn      func(ctx context.Context, userID, entryID string) (int, int64, error)
+	downloadChunkFn func(ctx context.Context, userID, entryID string, seq int) ([]byte, error)
 }
 
 func (f *fakeEntryService) Create(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error) {
@@ -37,8 +40,8 @@ func (f *fakeEntryService) Get(ctx context.Context, userID, entryID string) (*mo
 	return f.getFn(ctx, userID, entryID)
 }
 
-func (f *fakeEntryService) List(ctx context.Context, userID string, entryType *model.EntryType) ([]*model.Entry, error) {
-	return f.listFn(ctx, userID, entryType)
+func (f *fakeEntryService) List(ctx context.Context, userID string, entryType *model.EntryType, includeData bool) ([]*model.Entry, error) {
+	return f.listFn(ctx, userID, entryType, includeData)
 }
 
 func (f *fakeEntryService) Update(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error) {
@@ -49,8 +52,20 @@ func (f *fakeEntryService) Delete(ctx context.Context, userID, entryID string) e
 	return f.deleteFn(ctx, userID, entryID)
 }
 
-func (f *fakeEntryService) Sync(ctx context.Context, userID string) ([]*model.Entry, error) {
-	return f.syncFn(ctx, userID)
+func (f *fakeEntryService) Sync(ctx context.Context, userID string, includeData bool) ([]*model.Entry, error) {
+	return f.syncFn(ctx, userID, includeData)
+}
+
+func (f *fakeEntryService) BeginUpload(ctx context.Context, userID string, header *model.Entry, expectedVersion int64) (service.UploadSession, error) {
+	return f.beginUploadFn(ctx, userID, header, expectedVersion)
+}
+
+func (f *fakeEntryService) EntryDataInfo(ctx context.Context, userID, entryID string) (int, int64, error) {
+	return f.dataInfoFn(ctx, userID, entryID)
+}
+
+func (f *fakeEntryService) DownloadChunk(ctx context.Context, userID, entryID string, seq int) ([]byte, error) {
+	return f.downloadChunkFn(ctx, userID, entryID, seq)
 }
 
 // sampleEntry returns a fully populated domain entry for mapping tests.
@@ -215,7 +230,7 @@ func TestEntryHandler_List_Success(t *testing.T) {
 		UpdatedAt: time.Unix(1700000001, 0),
 	}}
 	fake := &fakeEntryService{
-		listFn: func(_ context.Context, userID string, entryType *model.EntryType) ([]*model.Entry, error) {
+		listFn: func(_ context.Context, userID string, entryType *model.EntryType, _ bool) ([]*model.Entry, error) {
 			gotUserID, gotType = userID, entryType
 			return entries, nil
 		},
@@ -326,7 +341,7 @@ func TestEntryHandler_Sync_Success(t *testing.T) {
 	var gotUserID string
 	entries := []*model.Entry{sampleEntry()}
 	fake := &fakeEntryService{
-		syncFn: func(_ context.Context, userID string) ([]*model.Entry, error) {
+		syncFn: func(_ context.Context, userID string, _ bool) ([]*model.Entry, error) {
 			gotUserID = userID
 			return entries, nil
 		},

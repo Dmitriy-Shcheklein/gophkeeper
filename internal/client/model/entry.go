@@ -56,8 +56,14 @@ type Entry struct {
 	// Metadata holds arbitrary text metadata supplied by the user.
 	Metadata string
 	// Data is the entry payload (credentials, text, raw bytes, card
-	// data — depending on Type).
+	// data — depending on Type). For entries whose content is stored
+	// chunked on the server it is empty and DataSize carries the real
+	// content size; use EntryService.Download to fetch the payload.
 	Data []byte
+	// DataSize is the total payload size in bytes as reported by the
+	// server. It is populated even when Data is omitted (List and Sync
+	// fetch metadata only).
+	DataSize int64
 	// Version is incremented on every update; updates must carry the
 	// version they are based on (optimistic locking).
 	Version int64

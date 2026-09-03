@@ -17,6 +17,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/charmbracelet/bubbletea"
 
@@ -54,6 +55,10 @@ type entryClient interface {
 	Remove(ctx context.Context, id string) error
 	// Sync returns the full current set of the user's entries.
 	Sync(ctx context.Context) ([]*model.Entry, error)
+	// Upload stores an entry streamed in chunks from a reader.
+	Upload(ctx context.Context, entry *model.Entry, expectedVersion int64, r io.Reader) (*model.Entry, error)
+	// Download streams the payload of an entry into a writer.
+	Download(ctx context.Context, id string, w io.Writer) error
 }
 
 // Compile-time assertions: the real services satisfy the consumer

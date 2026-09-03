@@ -19,6 +19,8 @@ import (
 // mirroring the semantics of the postgres implementation.
 type mockEntryRepo struct {
 	entries map[string]*model.Entry
+	// chunks holds the stored chunked payloads: entry id -> seq -> data.
+	chunks map[string]map[int][]byte
 	// nextID is incremented on every Create to generate unique IDs.
 	nextID int64
 	// createErr, if set, is returned by Create.
@@ -31,10 +33,15 @@ type mockEntryRepo struct {
 	deleteErr error
 	// lastListFilter records the filter passed to the last List call.
 	lastListFilter *model.EntryType
+	// lastListIncludeData records the includeData flag of the last List.
+	lastListIncludeData bool
 }
 
 func newMockEntryRepo() *mockEntryRepo {
-	return &mockEntryRepo{entries: make(map[string]*model.Entry)}
+	return &mockEntryRepo{
+		entries: make(map[string]*model.Entry),
+		chunks:  make(map[string]map[int][]byte),
+	}
 }
 
 func (m *mockEntryRepo) Create(_ context.Context, entry *model.Entry) error {
@@ -46,29 +53,173 @@ func (m *mockEntryRepo) Create(_ context.Context, entry *model.Entry) error {
 	entry.Version = 1
 	entry.CreatedAt = time.Now()
 	entry.UpdatedAt = entry.CreatedAt
+	entry.DataSize = int64(len(entry.Data))
+	entry.State = model.EntryStateReady
 	m.entries[entry.ID] = entry
 	return nil
 }
 
-func (m *mockEntryRepo) GetByID(_ context.Context, userID, entryID string) (*model.Entry, error) {
-	entry, ok := m.entries[entryID]
-	if !ok || entry.UserID != userID {
-		return nil, model.ErrNotFound
+func (m *mockEntryRepo) CreatePending(_ context.Context, entry *model.Entry) error {
+	if m.createErr != nil {
+		return m.createErr
 	}
-	return entry, nil
+	id := atomic.AddInt64(&m.nextID, 1)
+	entry.ID = fmt.Sprintf("e%d", id)
+	entry.Version = 1
+	entry.CreatedAt = time.Now()
+	entry.UpdatedAt = entry.CreatedAt
+	entry.Data = nil
+	entry.DataSize = 0
+	entry.State = model.EntryStatePending
+	m.entries[entry.ID] = entry
+	return nil
 }
 
-func (m *mockEntryRepo) List(_ context.Context, userID string, entryType *model.EntryType) ([]*model.Entry, error) {
+func (m *mockEntryRepo) AppendChunk(_ context.Context, entryID string, seq int, data []byte) error {
+	if _, ok := m.entries[entryID]; !ok {
+		return model.ErrNotFound
+	}
+	if m.chunks[entryID] == nil {
+		m.chunks[entryID] = make(map[int][]byte)
+	}
+	// Mirror the (entry_id, seq) primary key of the real storage.
+	if _, dup := m.chunks[entryID][seq]; dup {
+		return fmt.Errorf("duplicate chunk seq %d", seq)
+	}
+	m.chunks[entryID][seq] = data
+	return nil
+}
+
+func (m *mockEntryRepo) FinalizeCreate(_ context.Context, entry *model.Entry) error {
+	stored, ok := m.entries[entry.ID]
+	if !ok || stored.State != model.EntryStatePending {
+		return model.ErrNotFound
+	}
+	stored.State = model.EntryStateReady
+	stored.DataSize = m.chunkedSize(stored.ID)
+	stored.UpdatedAt = time.Now()
+	*entry = *stored
+	return nil
+}
+
+func (m *mockEntryRepo) chunkedSize(entryID string) int64 {
+	var total int64
+	for _, data := range m.chunks[entryID] {
+		total += int64(len(data))
+	}
+	return total
+}
+
+func (m *mockEntryRepo) PrepareUpdate(_ context.Context, entry *model.Entry) (int, error) {
+	stored, ok := m.entries[entry.ID]
+	if !ok || stored.UserID != entry.UserID || stored.State != model.EntryStateReady {
+		return 0, model.ErrNotFound
+	}
+	if stored.Version != entry.Version {
+		return 0, model.ErrConflict
+	}
+	return len(m.chunks[entry.ID]), nil
+}
+
+func (m *mockEntryRepo) FinalizeUpdate(_ context.Context, entry *model.Entry, chunkOffset int) error {
+	stored, ok := m.entries[entry.ID]
+	if !ok || stored.UserID != entry.UserID || stored.State != model.EntryStateReady {
+		return model.ErrNotFound
+	}
+	if stored.Version != entry.Version {
+		return model.ErrConflict
+	}
+	chunks := m.chunks[entry.ID]
+	for seq := range chunks {
+		if seq < chunkOffset {
+			delete(chunks, seq)
+		}
+	}
+	// Mirror the storage invariant: after the finalize the chunks are
+	// renumbered to start at 0.
+	for seq := chunkOffset; seq < chunkOffset+len(chunks); seq++ {
+		if data, ok := chunks[seq]; ok {
+			delete(chunks, seq)
+			chunks[seq-chunkOffset] = data
+		}
+	}
+	stored.Label = entry.Label
+	stored.Metadata = entry.Metadata
+	stored.Data = nil
+	stored.DataSize = m.chunkedSize(stored.ID)
+	stored.Version++
+	stored.UpdatedAt = time.Now()
+	*entry = *stored
+	return nil
+}
+
+func (m *mockEntryRepo) AbortUpdate(_ context.Context, entryID string, chunkOffset int) error {
+	for seq := range m.chunks[entryID] {
+		if seq >= chunkOffset {
+			delete(m.chunks[entryID], seq)
+		}
+	}
+	return nil
+}
+
+func (m *mockEntryRepo) DeleteIfPending(_ context.Context, entryID string) error {
+	if entry, ok := m.entries[entryID]; ok && entry.State == model.EntryStatePending {
+		delete(m.entries, entryID)
+	}
+	return nil
+}
+
+func (m *mockEntryRepo) ChunkCount(_ context.Context, _, entryID string) (int, error) {
+	return len(m.chunks[entryID]), nil
+}
+
+func (m *mockEntryRepo) Chunk(_ context.Context, userID, entryID string, seq int) ([]byte, error) {
+	entry, ok := m.entries[entryID]
+	if !ok || entry.UserID != userID || entry.State != model.EntryStateReady {
+		return nil, model.ErrNotFound
+	}
+	data, ok := m.chunks[entryID][seq]
+	if !ok {
+		return nil, model.ErrNotFound
+	}
+	return data, nil
+}
+
+// chunked strips the payload of a chunked entry the way the postgres
+// implementation does: Data is empty, DataSize carries the size.
+func (m *mockEntryRepo) chunked(entry *model.Entry) *model.Entry {
+	if len(m.chunks[entry.ID]) == 0 {
+		return entry
+	}
+	copied := *entry
+	copied.Data = nil
+	return &copied
+}
+
+func (m *mockEntryRepo) GetByID(_ context.Context, userID, entryID string) (*model.Entry, error) {
+	entry, ok := m.entries[entryID]
+	if !ok || entry.UserID != userID || entry.State == model.EntryStatePending {
+		return nil, model.ErrNotFound
+	}
+	return m.chunked(entry), nil
+}
+
+func (m *mockEntryRepo) List(_ context.Context, userID string, entryType *model.EntryType, includeData bool) ([]*model.Entry, error) {
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
 	m.lastListFilter = entryType
+	m.lastListIncludeData = includeData
 	var result []*model.Entry
 	for _, entry := range m.entries {
-		if entry.UserID != userID {
+		if entry.UserID != userID || entry.State == model.EntryStatePending {
 			continue
 		}
 		if entryType != nil && entry.Type != *entryType {
+			continue
+		}
+		if !includeData {
+			result = append(result, m.chunked(entry))
 			continue
 		}
 		result = append(result, entry)
@@ -332,7 +483,7 @@ func TestEntryList(t *testing.T) {
 			svc, repo := newTestEntryService()
 			repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d")}
 
-			got, err := svc.List(context.Background(), "user-1", tt.filter)
+			got, err := svc.List(context.Background(), "user-1", tt.filter, true)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
@@ -355,7 +506,7 @@ func TestEntryListRepoErrorPropagates(t *testing.T) {
 	repo.listErr = errors.New("boom")
 	svc := NewEntryService(repo)
 
-	_, err := svc.List(context.Background(), "user-1", nil)
+	_, err := svc.List(context.Background(), "user-1", nil, true)
 	assert.ErrorContains(t, err, "boom")
 }
 
@@ -494,7 +645,7 @@ func TestEntrySyncReturnsFullList(t *testing.T) {
 	repo.entries["e2"] = &model.Entry{ID: "e2", UserID: "user-1", Type: model.EntryTypeCard, Data: []byte("d2")}
 	repo.entries["foreign"] = &model.Entry{ID: "foreign", UserID: "user-2", Type: model.EntryTypeText, Data: []byte("d3")}
 
-	got, err := svc.Sync(context.Background(), "user-1")
+	got, err := svc.Sync(context.Background(), "user-1", true)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 
@@ -505,6 +656,6 @@ func TestEntrySyncReturnsFullList(t *testing.T) {
 func TestEntrySyncEmptyUserID(t *testing.T) {
 	svc, _ := newTestEntryService()
 
-	_, err := svc.Sync(context.Background(), "")
+	_, err := svc.Sync(context.Background(), "", true)
 	assert.ErrorIs(t, err, ErrEmptyUserID)
 }

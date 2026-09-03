@@ -210,7 +210,13 @@ func (x *GetEntryResponse) GetEntry() *Entry {
 
 // ListEntriesRequest asks for all entries of the authenticated user.
 type ListEntriesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Currently no filters; reserved for future pagination.
+	// include_data controls whether entry payloads are carried in the
+	// response. By default it is false: entries come with metadata and
+	// data_size only, and the content is fetched with DownloadEntryData
+	// on demand. This keeps List usable with large binary entries.
+	IncludeData   bool `protobuf:"varint,1,opt,name=include_data,json=includeData,proto3" json:"include_data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -243,6 +249,13 @@ func (x *ListEntriesRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListEntriesRequest.ProtoReflect.Descriptor instead.
 func (*ListEntriesRequest) Descriptor() ([]byte, []int) {
 	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListEntriesRequest) GetIncludeData() bool {
+	if x != nil {
+		return x.IncludeData
+	}
+	return false
 }
 
 // ListEntriesResponse returns all entries of the user.
@@ -467,17 +480,557 @@ func (*DeleteEntryResponse) Descriptor() ([]byte, []int) {
 	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{9}
 }
 
+// UploadEntryHeader is the first message of an UploadEntry stream: it
+// describes the entry being stored before any payload chunks follow.
+type UploadEntryHeader struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// entry carries type, label and metadata. id, version and
+	// timestamps are ignored by the server; data must be empty — the
+	// payload arrives as chunks.
+	Entry *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	// expected_version is the optimistic-locking version the upload is
+	// based on: 0 creates a new entry, a positive value updates the
+	// existing one and fails with FailedPrecondition when stale.
+	ExpectedVersion int64 `protobuf:"varint,2,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *UploadEntryHeader) Reset() {
+	*x = UploadEntryHeader{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadEntryHeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadEntryHeader) ProtoMessage() {}
+
+func (x *UploadEntryHeader) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadEntryHeader.ProtoReflect.Descriptor instead.
+func (*UploadEntryHeader) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UploadEntryHeader) GetEntry() *Entry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+func (x *UploadEntryHeader) GetExpectedVersion() int64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+// UploadEntryChunk carries one piece of the payload. The server
+// concatenates chunks in the order they are sent.
+type UploadEntryChunk struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// data is a piece of the payload.
+	Data          []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadEntryChunk) Reset() {
+	*x = UploadEntryChunk{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadEntryChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadEntryChunk) ProtoMessage() {}
+
+func (x *UploadEntryChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadEntryChunk.ProtoReflect.Descriptor instead.
+func (*UploadEntryChunk) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UploadEntryChunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+// UploadEntryFooter is the last message of an UploadEntry stream. The
+// server verifies that the digest matches the payload it received and
+// rejects the whole upload on mismatch.
+type UploadEntryFooter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// sha256 is the hex-encoded SHA-256 digest of the full payload.
+	Sha256        string `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadEntryFooter) Reset() {
+	*x = UploadEntryFooter{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadEntryFooter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadEntryFooter) ProtoMessage() {}
+
+func (x *UploadEntryFooter) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadEntryFooter.ProtoReflect.Descriptor instead.
+func (*UploadEntryFooter) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UploadEntryFooter) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+// UploadEntryRequest is a single message of the UploadEntry stream:
+// the first message must be a header, the last one a footer, all
+// messages in between are chunks.
+type UploadEntryRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*UploadEntryRequest_Header
+	//	*UploadEntryRequest_Chunk
+	//	*UploadEntryRequest_Footer
+	Payload       isUploadEntryRequest_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadEntryRequest) Reset() {
+	*x = UploadEntryRequest{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadEntryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadEntryRequest) ProtoMessage() {}
+
+func (x *UploadEntryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadEntryRequest.ProtoReflect.Descriptor instead.
+func (*UploadEntryRequest) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UploadEntryRequest) GetPayload() isUploadEntryRequest_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *UploadEntryRequest) GetHeader() *UploadEntryHeader {
+	if x != nil {
+		if x, ok := x.Payload.(*UploadEntryRequest_Header); ok {
+			return x.Header
+		}
+	}
+	return nil
+}
+
+func (x *UploadEntryRequest) GetChunk() *UploadEntryChunk {
+	if x != nil {
+		if x, ok := x.Payload.(*UploadEntryRequest_Chunk); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+func (x *UploadEntryRequest) GetFooter() *UploadEntryFooter {
+	if x != nil {
+		if x, ok := x.Payload.(*UploadEntryRequest_Footer); ok {
+			return x.Footer
+		}
+	}
+	return nil
+}
+
+type isUploadEntryRequest_Payload interface {
+	isUploadEntryRequest_Payload()
+}
+
+type UploadEntryRequest_Header struct {
+	// header starts the upload and describes the entry.
+	Header *UploadEntryHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
+}
+
+type UploadEntryRequest_Chunk struct {
+	// chunk is one piece of the entry payload.
+	Chunk *UploadEntryChunk `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+type UploadEntryRequest_Footer struct {
+	// footer ends the upload with the payload digest.
+	Footer *UploadEntryFooter `protobuf:"bytes,3,opt,name=footer,proto3,oneof"`
+}
+
+func (*UploadEntryRequest_Header) isUploadEntryRequest_Payload() {}
+
+func (*UploadEntryRequest_Chunk) isUploadEntryRequest_Payload() {}
+
+func (*UploadEntryRequest_Footer) isUploadEntryRequest_Payload() {}
+
+// UploadEntryResponse returns the stored entry as seen by the server.
+type UploadEntryResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// entry includes the server-assigned id, version and timestamps.
+	// data is empty; use DownloadEntryData to fetch the content.
+	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadEntryResponse) Reset() {
+	*x = UploadEntryResponse{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadEntryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadEntryResponse) ProtoMessage() {}
+
+func (x *UploadEntryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadEntryResponse.ProtoReflect.Descriptor instead.
+func (*UploadEntryResponse) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UploadEntryResponse) GetEntry() *Entry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+// DownloadEntryDataRequest identifies an entry whose payload should
+// be streamed.
+type DownloadEntryDataRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the entry identifier.
+	Id            string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadEntryDataRequest) Reset() {
+	*x = DownloadEntryDataRequest{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadEntryDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadEntryDataRequest) ProtoMessage() {}
+
+func (x *DownloadEntryDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadEntryDataRequest.ProtoReflect.Descriptor instead.
+func (*DownloadEntryDataRequest) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *DownloadEntryDataRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// DownloadEntryDataHeader is the first message of the
+// DownloadEntryData stream: it reports the payload size before the
+// chunks follow.
+type DownloadEntryDataHeader struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// size is the total payload size in bytes.
+	Size          int64 `protobuf:"varint,1,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadEntryDataHeader) Reset() {
+	*x = DownloadEntryDataHeader{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadEntryDataHeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadEntryDataHeader) ProtoMessage() {}
+
+func (x *DownloadEntryDataHeader) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadEntryDataHeader.ProtoReflect.Descriptor instead.
+func (*DownloadEntryDataHeader) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *DownloadEntryDataHeader) GetSize() int64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+// DataChunk carries one piece of an entry payload.
+type DataChunk struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// data is a piece of the payload.
+	Data          []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DataChunk) Reset() {
+	*x = DataChunk{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DataChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DataChunk) ProtoMessage() {}
+
+func (x *DataChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DataChunk.ProtoReflect.Descriptor instead.
+func (*DataChunk) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DataChunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+// DownloadEntryDataResponse is a single message of the
+// DownloadEntryData stream: the first message is a header, all
+// following messages chunks.
+type DownloadEntryDataResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*DownloadEntryDataResponse_Header
+	//	*DownloadEntryDataResponse_Chunk
+	Payload       isDownloadEntryDataResponse_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadEntryDataResponse) Reset() {
+	*x = DownloadEntryDataResponse{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadEntryDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadEntryDataResponse) ProtoMessage() {}
+
+func (x *DownloadEntryDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadEntryDataResponse.ProtoReflect.Descriptor instead.
+func (*DownloadEntryDataResponse) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *DownloadEntryDataResponse) GetPayload() isDownloadEntryDataResponse_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *DownloadEntryDataResponse) GetHeader() *DownloadEntryDataHeader {
+	if x != nil {
+		if x, ok := x.Payload.(*DownloadEntryDataResponse_Header); ok {
+			return x.Header
+		}
+	}
+	return nil
+}
+
+func (x *DownloadEntryDataResponse) GetChunk() *DataChunk {
+	if x != nil {
+		if x, ok := x.Payload.(*DownloadEntryDataResponse_Chunk); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+type isDownloadEntryDataResponse_Payload interface {
+	isDownloadEntryDataResponse_Payload()
+}
+
+type DownloadEntryDataResponse_Header struct {
+	// header reports the total payload size.
+	Header *DownloadEntryDataHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
+}
+
+type DownloadEntryDataResponse_Chunk struct {
+	// chunk is one piece of the entry payload.
+	Chunk *DataChunk `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+func (*DownloadEntryDataResponse_Header) isDownloadEntryDataResponse_Payload() {}
+
+func (*DownloadEntryDataResponse_Chunk) isDownloadEntryDataResponse_Payload() {}
+
 // SyncRequest asks for the current state of all entries of the
 // authenticated user.
 type SyncRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The user is identified by the JWT in request metadata.
+	// include_data controls whether entry payloads are carried in the
+	// response (see ListEntriesRequest.include_data). Default false:
+	// Sync returns metadata and data_size only, so it stays cheap even
+	// with large binary entries.
+	IncludeData   bool `protobuf:"varint,1,opt,name=include_data,json=includeData,proto3" json:"include_data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SyncRequest) Reset() {
 	*x = SyncRequest{}
-	mi := &file_gophkeeper_v1_service_proto_msgTypes[10]
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -489,7 +1042,7 @@ func (x *SyncRequest) String() string {
 func (*SyncRequest) ProtoMessage() {}
 
 func (x *SyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gophkeeper_v1_service_proto_msgTypes[10]
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,7 +1055,14 @@ func (x *SyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncRequest.ProtoReflect.Descriptor instead.
 func (*SyncRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{10}
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SyncRequest) GetIncludeData() bool {
+	if x != nil {
+		return x.IncludeData
+	}
+	return false
 }
 
 // SyncResponse carries the full current list of the user's entries,
@@ -517,7 +1077,7 @@ type SyncResponse struct {
 
 func (x *SyncResponse) Reset() {
 	*x = SyncResponse{}
-	mi := &file_gophkeeper_v1_service_proto_msgTypes[11]
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -529,7 +1089,7 @@ func (x *SyncResponse) String() string {
 func (*SyncResponse) ProtoMessage() {}
 
 func (x *SyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gophkeeper_v1_service_proto_msgTypes[11]
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -542,7 +1102,7 @@ func (x *SyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncResponse.ProtoReflect.Descriptor instead.
 func (*SyncResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{11}
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SyncResponse) GetEntries() []*Entry {
@@ -564,8 +1124,9 @@ const file_gophkeeper_v1_service_proto_rawDesc = "" +
 	"\x0fGetEntryRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
 	"\x10GetEntryResponse\x12*\n" +
-	"\x05entry\x18\x01 \x01(\v2\x14.gophkeeper.v1.EntryR\x05entry\"\x14\n" +
-	"\x12ListEntriesRequest\"E\n" +
+	"\x05entry\x18\x01 \x01(\v2\x14.gophkeeper.v1.EntryR\x05entry\"7\n" +
+	"\x12ListEntriesRequest\x12!\n" +
+	"\finclude_data\x18\x01 \x01(\bR\vincludeData\"E\n" +
 	"\x13ListEntriesResponse\x12.\n" +
 	"\aentries\x18\x01 \x03(\v2\x14.gophkeeper.v1.EntryR\aentries\"@\n" +
 	"\x12UpdateEntryRequest\x12*\n" +
@@ -574,17 +1135,44 @@ const file_gophkeeper_v1_service_proto_rawDesc = "" +
 	"\x05entry\x18\x01 \x01(\v2\x14.gophkeeper.v1.EntryR\x05entry\"$\n" +
 	"\x12DeleteEntryRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
-	"\x13DeleteEntryResponse\"\r\n" +
-	"\vSyncRequest\">\n" +
+	"\x13DeleteEntryResponse\"j\n" +
+	"\x11UploadEntryHeader\x12*\n" +
+	"\x05entry\x18\x01 \x01(\v2\x14.gophkeeper.v1.EntryR\x05entry\x12)\n" +
+	"\x10expected_version\x18\x02 \x01(\x03R\x0fexpectedVersion\"&\n" +
+	"\x10UploadEntryChunk\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"+\n" +
+	"\x11UploadEntryFooter\x12\x16\n" +
+	"\x06sha256\x18\x01 \x01(\tR\x06sha256\"\xd0\x01\n" +
+	"\x12UploadEntryRequest\x12:\n" +
+	"\x06header\x18\x01 \x01(\v2 .gophkeeper.v1.UploadEntryHeaderH\x00R\x06header\x127\n" +
+	"\x05chunk\x18\x02 \x01(\v2\x1f.gophkeeper.v1.UploadEntryChunkH\x00R\x05chunk\x12:\n" +
+	"\x06footer\x18\x03 \x01(\v2 .gophkeeper.v1.UploadEntryFooterH\x00R\x06footerB\t\n" +
+	"\apayload\"A\n" +
+	"\x13UploadEntryResponse\x12*\n" +
+	"\x05entry\x18\x01 \x01(\v2\x14.gophkeeper.v1.EntryR\x05entry\"*\n" +
+	"\x18DownloadEntryDataRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"-\n" +
+	"\x17DownloadEntryDataHeader\x12\x12\n" +
+	"\x04size\x18\x01 \x01(\x03R\x04size\"\x1f\n" +
+	"\tDataChunk\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\x9a\x01\n" +
+	"\x19DownloadEntryDataResponse\x12@\n" +
+	"\x06header\x18\x01 \x01(\v2&.gophkeeper.v1.DownloadEntryDataHeaderH\x00R\x06header\x120\n" +
+	"\x05chunk\x18\x02 \x01(\v2\x18.gophkeeper.v1.DataChunkH\x00R\x05chunkB\t\n" +
+	"\apayload\"0\n" +
+	"\vSyncRequest\x12!\n" +
+	"\finclude_data\x18\x01 \x01(\bR\vincludeData\">\n" +
 	"\fSyncResponse\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.gophkeeper.v1.EntryR\aentries2\xd9\x03\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.gophkeeper.v1.EntryR\aentries2\x96\x05\n" +
 	"\fEntryService\x12O\n" +
 	"\x06Create\x12!.gophkeeper.v1.CreateEntryRequest\x1a\".gophkeeper.v1.CreateEntryResponse\x12F\n" +
 	"\x03Get\x12\x1e.gophkeeper.v1.GetEntryRequest\x1a\x1f.gophkeeper.v1.GetEntryResponse\x12M\n" +
 	"\x04List\x12!.gophkeeper.v1.ListEntriesRequest\x1a\".gophkeeper.v1.ListEntriesResponse\x12O\n" +
 	"\x06Update\x12!.gophkeeper.v1.UpdateEntryRequest\x1a\".gophkeeper.v1.UpdateEntryResponse\x12O\n" +
 	"\x06Delete\x12!.gophkeeper.v1.DeleteEntryRequest\x1a\".gophkeeper.v1.DeleteEntryResponse\x12?\n" +
-	"\x04Sync\x12\x1a.gophkeeper.v1.SyncRequest\x1a\x1b.gophkeeper.v1.SyncResponseBOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
+	"\x04Sync\x12\x1a.gophkeeper.v1.SyncRequest\x1a\x1b.gophkeeper.v1.SyncResponse\x12Q\n" +
+	"\x06Upload\x12!.gophkeeper.v1.UploadEntryRequest\x1a\".gophkeeper.v1.UploadEntryResponse(\x01\x12h\n" +
+	"\x11DownloadEntryData\x12'.gophkeeper.v1.DownloadEntryDataRequest\x1a(.gophkeeper.v1.DownloadEntryDataResponse0\x01BOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
 
 var (
 	file_gophkeeper_v1_service_proto_rawDescOnce sync.Once
@@ -598,47 +1186,67 @@ func file_gophkeeper_v1_service_proto_rawDescGZIP() []byte {
 	return file_gophkeeper_v1_service_proto_rawDescData
 }
 
-var file_gophkeeper_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_gophkeeper_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_gophkeeper_v1_service_proto_goTypes = []any{
-	(*CreateEntryRequest)(nil),  // 0: gophkeeper.v1.CreateEntryRequest
-	(*CreateEntryResponse)(nil), // 1: gophkeeper.v1.CreateEntryResponse
-	(*GetEntryRequest)(nil),     // 2: gophkeeper.v1.GetEntryRequest
-	(*GetEntryResponse)(nil),    // 3: gophkeeper.v1.GetEntryResponse
-	(*ListEntriesRequest)(nil),  // 4: gophkeeper.v1.ListEntriesRequest
-	(*ListEntriesResponse)(nil), // 5: gophkeeper.v1.ListEntriesResponse
-	(*UpdateEntryRequest)(nil),  // 6: gophkeeper.v1.UpdateEntryRequest
-	(*UpdateEntryResponse)(nil), // 7: gophkeeper.v1.UpdateEntryResponse
-	(*DeleteEntryRequest)(nil),  // 8: gophkeeper.v1.DeleteEntryRequest
-	(*DeleteEntryResponse)(nil), // 9: gophkeeper.v1.DeleteEntryResponse
-	(*SyncRequest)(nil),         // 10: gophkeeper.v1.SyncRequest
-	(*SyncResponse)(nil),        // 11: gophkeeper.v1.SyncResponse
-	(*Entry)(nil),               // 12: gophkeeper.v1.Entry
+	(*CreateEntryRequest)(nil),        // 0: gophkeeper.v1.CreateEntryRequest
+	(*CreateEntryResponse)(nil),       // 1: gophkeeper.v1.CreateEntryResponse
+	(*GetEntryRequest)(nil),           // 2: gophkeeper.v1.GetEntryRequest
+	(*GetEntryResponse)(nil),          // 3: gophkeeper.v1.GetEntryResponse
+	(*ListEntriesRequest)(nil),        // 4: gophkeeper.v1.ListEntriesRequest
+	(*ListEntriesResponse)(nil),       // 5: gophkeeper.v1.ListEntriesResponse
+	(*UpdateEntryRequest)(nil),        // 6: gophkeeper.v1.UpdateEntryRequest
+	(*UpdateEntryResponse)(nil),       // 7: gophkeeper.v1.UpdateEntryResponse
+	(*DeleteEntryRequest)(nil),        // 8: gophkeeper.v1.DeleteEntryRequest
+	(*DeleteEntryResponse)(nil),       // 9: gophkeeper.v1.DeleteEntryResponse
+	(*UploadEntryHeader)(nil),         // 10: gophkeeper.v1.UploadEntryHeader
+	(*UploadEntryChunk)(nil),          // 11: gophkeeper.v1.UploadEntryChunk
+	(*UploadEntryFooter)(nil),         // 12: gophkeeper.v1.UploadEntryFooter
+	(*UploadEntryRequest)(nil),        // 13: gophkeeper.v1.UploadEntryRequest
+	(*UploadEntryResponse)(nil),       // 14: gophkeeper.v1.UploadEntryResponse
+	(*DownloadEntryDataRequest)(nil),  // 15: gophkeeper.v1.DownloadEntryDataRequest
+	(*DownloadEntryDataHeader)(nil),   // 16: gophkeeper.v1.DownloadEntryDataHeader
+	(*DataChunk)(nil),                 // 17: gophkeeper.v1.DataChunk
+	(*DownloadEntryDataResponse)(nil), // 18: gophkeeper.v1.DownloadEntryDataResponse
+	(*SyncRequest)(nil),               // 19: gophkeeper.v1.SyncRequest
+	(*SyncResponse)(nil),              // 20: gophkeeper.v1.SyncResponse
+	(*Entry)(nil),                     // 21: gophkeeper.v1.Entry
 }
 var file_gophkeeper_v1_service_proto_depIdxs = []int32{
-	12, // 0: gophkeeper.v1.CreateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
-	12, // 1: gophkeeper.v1.CreateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
-	12, // 2: gophkeeper.v1.GetEntryResponse.entry:type_name -> gophkeeper.v1.Entry
-	12, // 3: gophkeeper.v1.ListEntriesResponse.entries:type_name -> gophkeeper.v1.Entry
-	12, // 4: gophkeeper.v1.UpdateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
-	12, // 5: gophkeeper.v1.UpdateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
-	12, // 6: gophkeeper.v1.SyncResponse.entries:type_name -> gophkeeper.v1.Entry
-	0,  // 7: gophkeeper.v1.EntryService.Create:input_type -> gophkeeper.v1.CreateEntryRequest
-	2,  // 8: gophkeeper.v1.EntryService.Get:input_type -> gophkeeper.v1.GetEntryRequest
-	4,  // 9: gophkeeper.v1.EntryService.List:input_type -> gophkeeper.v1.ListEntriesRequest
-	6,  // 10: gophkeeper.v1.EntryService.Update:input_type -> gophkeeper.v1.UpdateEntryRequest
-	8,  // 11: gophkeeper.v1.EntryService.Delete:input_type -> gophkeeper.v1.DeleteEntryRequest
-	10, // 12: gophkeeper.v1.EntryService.Sync:input_type -> gophkeeper.v1.SyncRequest
-	1,  // 13: gophkeeper.v1.EntryService.Create:output_type -> gophkeeper.v1.CreateEntryResponse
-	3,  // 14: gophkeeper.v1.EntryService.Get:output_type -> gophkeeper.v1.GetEntryResponse
-	5,  // 15: gophkeeper.v1.EntryService.List:output_type -> gophkeeper.v1.ListEntriesResponse
-	7,  // 16: gophkeeper.v1.EntryService.Update:output_type -> gophkeeper.v1.UpdateEntryResponse
-	9,  // 17: gophkeeper.v1.EntryService.Delete:output_type -> gophkeeper.v1.DeleteEntryResponse
-	11, // 18: gophkeeper.v1.EntryService.Sync:output_type -> gophkeeper.v1.SyncResponse
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	21, // 0: gophkeeper.v1.CreateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
+	21, // 1: gophkeeper.v1.CreateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	21, // 2: gophkeeper.v1.GetEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	21, // 3: gophkeeper.v1.ListEntriesResponse.entries:type_name -> gophkeeper.v1.Entry
+	21, // 4: gophkeeper.v1.UpdateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
+	21, // 5: gophkeeper.v1.UpdateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	21, // 6: gophkeeper.v1.UploadEntryHeader.entry:type_name -> gophkeeper.v1.Entry
+	10, // 7: gophkeeper.v1.UploadEntryRequest.header:type_name -> gophkeeper.v1.UploadEntryHeader
+	11, // 8: gophkeeper.v1.UploadEntryRequest.chunk:type_name -> gophkeeper.v1.UploadEntryChunk
+	12, // 9: gophkeeper.v1.UploadEntryRequest.footer:type_name -> gophkeeper.v1.UploadEntryFooter
+	21, // 10: gophkeeper.v1.UploadEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	16, // 11: gophkeeper.v1.DownloadEntryDataResponse.header:type_name -> gophkeeper.v1.DownloadEntryDataHeader
+	17, // 12: gophkeeper.v1.DownloadEntryDataResponse.chunk:type_name -> gophkeeper.v1.DataChunk
+	21, // 13: gophkeeper.v1.SyncResponse.entries:type_name -> gophkeeper.v1.Entry
+	0,  // 14: gophkeeper.v1.EntryService.Create:input_type -> gophkeeper.v1.CreateEntryRequest
+	2,  // 15: gophkeeper.v1.EntryService.Get:input_type -> gophkeeper.v1.GetEntryRequest
+	4,  // 16: gophkeeper.v1.EntryService.List:input_type -> gophkeeper.v1.ListEntriesRequest
+	6,  // 17: gophkeeper.v1.EntryService.Update:input_type -> gophkeeper.v1.UpdateEntryRequest
+	8,  // 18: gophkeeper.v1.EntryService.Delete:input_type -> gophkeeper.v1.DeleteEntryRequest
+	19, // 19: gophkeeper.v1.EntryService.Sync:input_type -> gophkeeper.v1.SyncRequest
+	13, // 20: gophkeeper.v1.EntryService.Upload:input_type -> gophkeeper.v1.UploadEntryRequest
+	15, // 21: gophkeeper.v1.EntryService.DownloadEntryData:input_type -> gophkeeper.v1.DownloadEntryDataRequest
+	1,  // 22: gophkeeper.v1.EntryService.Create:output_type -> gophkeeper.v1.CreateEntryResponse
+	3,  // 23: gophkeeper.v1.EntryService.Get:output_type -> gophkeeper.v1.GetEntryResponse
+	5,  // 24: gophkeeper.v1.EntryService.List:output_type -> gophkeeper.v1.ListEntriesResponse
+	7,  // 25: gophkeeper.v1.EntryService.Update:output_type -> gophkeeper.v1.UpdateEntryResponse
+	9,  // 26: gophkeeper.v1.EntryService.Delete:output_type -> gophkeeper.v1.DeleteEntryResponse
+	20, // 27: gophkeeper.v1.EntryService.Sync:output_type -> gophkeeper.v1.SyncResponse
+	14, // 28: gophkeeper.v1.EntryService.Upload:output_type -> gophkeeper.v1.UploadEntryResponse
+	18, // 29: gophkeeper.v1.EntryService.DownloadEntryData:output_type -> gophkeeper.v1.DownloadEntryDataResponse
+	22, // [22:30] is the sub-list for method output_type
+	14, // [14:22] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_gophkeeper_v1_service_proto_init() }
@@ -647,13 +1255,22 @@ func file_gophkeeper_v1_service_proto_init() {
 		return
 	}
 	file_gophkeeper_v1_models_proto_init()
+	file_gophkeeper_v1_service_proto_msgTypes[13].OneofWrappers = []any{
+		(*UploadEntryRequest_Header)(nil),
+		(*UploadEntryRequest_Chunk)(nil),
+		(*UploadEntryRequest_Footer)(nil),
+	}
+	file_gophkeeper_v1_service_proto_msgTypes[18].OneofWrappers = []any{
+		(*DownloadEntryDataResponse_Header)(nil),
+		(*DownloadEntryDataResponse_Chunk)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gophkeeper_v1_service_proto_rawDesc), len(file_gophkeeper_v1_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

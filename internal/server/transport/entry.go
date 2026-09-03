@@ -2,6 +2,8 @@ package transport
 
 import (
 	"context"
+	"errors"
+	"io"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,13 +23,20 @@ type entryService interface {
 	// Get returns a single entry of the user by id.
 	Get(ctx context.Context, userID, entryID string) (*model.Entry, error)
 	// List returns the entries of the user, optionally filtered by type.
-	List(ctx context.Context, userID string, entryType *model.EntryType) ([]*model.Entry, error)
+	// Payloads are only loaded when includeData is set.
+	List(ctx context.Context, userID string, entryType *model.EntryType, includeData bool) ([]*model.Entry, error)
 	// Update applies changes to an entry guarded by optimistic locking.
 	Update(ctx context.Context, userID string, entry *model.Entry) (*model.Entry, error)
 	// Delete removes an entry of the user by id.
 	Delete(ctx context.Context, userID, entryID string) error
 	// Sync returns the full current entry state of the user.
-	Sync(ctx context.Context, userID string) ([]*model.Entry, error)
+	Sync(ctx context.Context, userID string, includeData bool) ([]*model.Entry, error)
+	// BeginUpload starts a chunked upload (see service.UploadSession).
+	BeginUpload(ctx context.Context, userID string, header *model.Entry, expectedVersion int64) (service.UploadSession, error)
+	// EntryDataInfo describes the payload layout for download streaming.
+	EntryDataInfo(ctx context.Context, userID, entryID string) (chunkCount int, size int64, err error)
+	// DownloadChunk returns one stored payload chunk.
+	DownloadChunk(ctx context.Context, userID, entryID string, seq int) ([]byte, error)
 }
 
 // EntryHandler implements gophkeeperv1.EntryServiceServer on top of the
@@ -88,14 +97,15 @@ func (h *EntryHandler) Get(ctx context.Context, req *gophkeeperv1.GetEntryReques
 	return &gophkeeperv1.GetEntryResponse{Entry: entryToProto(entry)}, nil
 }
 
-// List returns all entries of the authenticated user. The API has no
-// type filter yet, so the service is asked for entries of all types.
-func (h *EntryHandler) List(ctx context.Context, _ *gophkeeperv1.ListEntriesRequest) (*gophkeeperv1.ListEntriesResponse, error) {
+// List returns all entries of the authenticated user. Payloads are
+// carried only when the request sets include_data; otherwise the
+// entries come with data_size so clients can fetch content on demand.
+func (h *EntryHandler) List(ctx context.Context, req *gophkeeperv1.ListEntriesRequest) (*gophkeeperv1.ListEntriesResponse, error) {
 	userID, err := userIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := h.entries.List(ctx, userID, nil)
+	entries, err := h.entries.List(ctx, userID, nil, req.GetIncludeData())
 	if err != nil {
 		return nil, toStatusError(err)
 	}
@@ -143,17 +153,148 @@ func (h *EntryHandler) Delete(ctx context.Context, req *gophkeeperv1.DeleteEntry
 
 // Sync returns the full current set of the authenticated user's
 // entries so several authorized clients of the same owner converge on
-// the same server state.
-func (h *EntryHandler) Sync(ctx context.Context, _ *gophkeeperv1.SyncRequest) (*gophkeeperv1.SyncResponse, error) {
+// the same server state. Payloads are carried only when the request
+// sets include_data.
+func (h *EntryHandler) Sync(ctx context.Context, req *gophkeeperv1.SyncRequest) (*gophkeeperv1.SyncResponse, error) {
 	userID, err := userIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := h.entries.Sync(ctx, userID)
+	entries, err := h.entries.Sync(ctx, userID, req.GetIncludeData())
 	if err != nil {
 		return nil, toStatusError(err)
 	}
 	return &gophkeeperv1.SyncResponse{Entries: entriesToProto(entries)}, nil
+}
+
+// Upload implements the client-streaming RPC: the first message must
+// carry the entry header, the last one the payload digest, everything
+// in between are payload chunks. The entry becomes visible only after
+// the stream completes successfully; a failed or aborted stream rolls
+// the upload back.
+func (h *EntryHandler) Upload(stream gophkeeperv1.EntryService_UploadServer) error {
+	userID, err := userIDFromContext(stream.Context())
+	if err != nil {
+		return err
+	}
+
+	first, err := stream.Recv()
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "read upload header: "+err.Error())
+	}
+	header := first.GetHeader()
+	if header == nil {
+		return status.Error(codes.InvalidArgument, "upload must start with a header")
+	}
+
+	session, err := h.entries.BeginUpload(stream.Context(), userID, &model.Entry{
+		Type:     entryTypeFromProto(header.GetEntry().GetType()),
+		Label:    header.GetEntry().GetLabel(),
+		Metadata: header.GetEntry().GetMetadata(),
+		ID:       header.GetEntry().GetId(),
+	}, header.GetExpectedVersion())
+	if err != nil {
+		return toStatusError(err)
+	}
+	// Roll back whatever was persisted if the stream does not end in a
+	// successful commit.
+	committed := false
+	defer func() {
+		if !committed {
+			session.Abort(stream.Context())
+		}
+	}()
+
+	var digest string
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return status.Error(codes.Internal, "read upload message: "+err.Error())
+		}
+		switch p := req.GetPayload().(type) {
+		case *gophkeeperv1.UploadEntryRequest_Chunk:
+			if digest != "" {
+				return status.Error(codes.InvalidArgument, "chunk after footer")
+			}
+			if err := session.AddChunk(p.Chunk.GetData()); err != nil {
+				return toStatusError(err)
+			}
+		case *gophkeeperv1.UploadEntryRequest_Footer:
+			digest = p.Footer.GetSha256()
+		default:
+			return status.Error(codes.InvalidArgument, "unexpected message type in upload stream")
+		}
+	}
+	if digest == "" {
+		return status.Error(codes.InvalidArgument, "upload must end with a footer")
+	}
+
+	entry, err := session.Commit(stream.Context(), digest)
+	if err != nil {
+		return toStatusError(err)
+	}
+	committed = true
+
+	return stream.SendAndClose(&gophkeeperv1.UploadEntryResponse{Entry: entryToProto(entry)})
+}
+
+// DownloadEntryData implements the server-streaming RPC: it sends a
+// header with the total payload size followed by the payload chunks.
+func (h *EntryHandler) DownloadEntryData(req *gophkeeperv1.DownloadEntryDataRequest, stream gophkeeperv1.EntryService_DownloadEntryDataServer) error {
+	userID, err := userIDFromContext(stream.Context())
+	if err != nil {
+		return err
+	}
+
+	chunkCount, size, err := h.entries.EntryDataInfo(stream.Context(), userID, req.GetId())
+	if err != nil {
+		return toStatusError(err)
+	}
+	if err := stream.Send(&gophkeeperv1.DownloadEntryDataResponse{
+		Payload: &gophkeeperv1.DownloadEntryDataResponse_Header{
+			Header: &gophkeeperv1.DownloadEntryDataHeader{Size: size},
+		},
+	}); err != nil {
+		return status.Error(codes.Internal, "send download header: "+err.Error())
+	}
+
+	if chunkCount == 0 {
+		// Inline payload: fetch it whole and stream it as one chunk.
+		entry, err := h.entries.Get(stream.Context(), userID, req.GetId())
+		if err != nil {
+			return toStatusError(err)
+		}
+		if err := sendChunk(stream, entry.Data); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	for seq := 0; seq < chunkCount; seq++ {
+		data, err := h.entries.DownloadChunk(stream.Context(), userID, req.GetId(), seq)
+		if err != nil {
+			return toStatusError(err)
+		}
+		if err := sendChunk(stream, data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sendChunk streams one payload chunk.
+func sendChunk(stream gophkeeperv1.EntryService_DownloadEntryDataServer, data []byte) error {
+	if err := stream.Send(&gophkeeperv1.DownloadEntryDataResponse{
+		Payload: &gophkeeperv1.DownloadEntryDataResponse_Chunk{
+			Chunk: &gophkeeperv1.DataChunk{Data: data},
+		},
+	}); err != nil {
+		return status.Error(codes.Internal, "send download chunk: "+err.Error())
+	}
+	return nil
 }
 
 // userIDFromContext extracts the user id of the authenticated caller

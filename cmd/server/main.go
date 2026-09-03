@@ -100,14 +100,26 @@ func run() error {
 	}
 
 	authService := service.NewAuthService(storage.Users(), jwtManager)
-	entryService := service.NewEntryService(storage.Entries())
+	entryService := service.NewEntryServiceWithLimits(storage.Entries(), cfg.MaxDataSize)
 
-	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		middleware.NewAuthInterceptor(jwtManager,
-			gophkeeperv1.AuthService_Register_FullMethodName,
-			gophkeeperv1.AuthService_Login_FullMethodName,
+	// messageSizeHeadroom covers the protobuf overhead around a
+	// maximum-size payload.
+	const messageSizeHeadroom = 1 << 20
+	msgSize := int(cfg.MaxDataSize) + messageSizeHeadroom
+
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(msgSize),
+		grpc.MaxSendMsgSize(msgSize),
+		grpc.ChainUnaryInterceptor(
+			middleware.NewAuthInterceptor(jwtManager,
+				gophkeeperv1.AuthService_Register_FullMethodName,
+				gophkeeperv1.AuthService_Login_FullMethodName,
+			),
 		),
-	))
+		grpc.ChainStreamInterceptor(
+			middleware.NewAuthStreamInterceptor(jwtManager),
+		),
+	)
 	gophkeeperv1.RegisterAuthServiceServer(grpcServer, transport.NewAuthHandler(authService))
 	gophkeeperv1.RegisterEntryServiceServer(grpcServer, transport.NewEntryHandler(entryService))
 

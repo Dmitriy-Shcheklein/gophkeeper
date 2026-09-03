@@ -72,6 +72,28 @@ func ShortID(id string) string {
 	return id
 }
 
+// SizeLabel renders a byte count as a compact human-readable string:
+// "—" for zero (no content or unknown), otherwise B/KB/MB/GB with one
+// decimal digit.
+func SizeLabel(size int64) string {
+	if size <= 0 {
+		return "—"
+	}
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	value := float64(size)
+	units := []string{"KB", "MB", "GB", "TB"}
+	for _, suffix := range units {
+		value /= unit
+		if value < unit {
+			return fmt.Sprintf("%.1f %s", value, suffix)
+		}
+	}
+	return fmt.Sprintf("%.1f PB", value/unit)
+}
+
 // MaskCardNumber hides all but the last 4 digits of a card number
 // with asterisks; shorter values are fully masked.
 func MaskCardNumber(number string) string {
@@ -254,6 +276,12 @@ func Entry(w io.Writer, e *model.Entry) {
 	case model.EntryTypeText:
 		_, _ = fmt.Fprintf(w, "  %s\n", string(e.Data))
 	case model.EntryTypeBinary:
+		if len(e.Data) == 0 && e.DataSize > 0 {
+			// Chunked entry viewed without its payload: report the
+			// server-side size and point at the download paths.
+			_, _ = fmt.Fprintf(w, "  binary data (%s) — use `get --out` or the TUI save action to download\n", SizeLabel(e.DataSize))
+			return
+		}
 		_, _ = fmt.Fprintf(w, "  binary data (%d bytes) — preview not available\n", len(e.Data))
 	default:
 		_, _ = fmt.Fprintf(w, "  <%d bytes of unknown type data>\n", len(e.Data))

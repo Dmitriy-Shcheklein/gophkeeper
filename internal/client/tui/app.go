@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -25,6 +26,7 @@ const (
 	screenDetail
 	screenForm
 	screenConfirm
+	screenSave
 )
 
 // Async operation results delivered to the model by tea.Cmd values.
@@ -42,6 +44,11 @@ type (
 	}
 	// deletedMsg carries the result of a delete.
 	deletedMsg struct{ err error }
+	// downloadedMsg carries the result of a save-to-file download.
+	downloadedMsg struct {
+		path string
+		err  error
+	}
 )
 
 // appModel is the root bubbletea model: it owns the navigation
@@ -95,6 +102,8 @@ type appModel struct {
 	confirm confirmModel
 	// auth holds the state of the login/register screen.
 	auth authModel
+	// save holds the state of the save-to-file screen.
+	save saveModel
 
 	// quitting is set when the user asked to exit.
 	quitting bool
@@ -160,6 +169,20 @@ func deleteCmd(entries entryClient, id string) tea.Cmd {
 	return func() tea.Msg {
 		err := entries.Remove(context.Background(), id)
 		return deletedMsg{err: err}
+	}
+}
+
+// uploadCmd stores the entry streamed from the file in the background
+// (never holding the whole payload in memory).
+func uploadCmd(entries entryClient, entry *model.Entry, expectedVersion int64, path string) tea.Cmd {
+	return func() tea.Msg {
+		file, err := os.Open(path)
+		if err != nil {
+			return savedMsg{err: err}
+		}
+		saved, err := entries.Upload(context.Background(), entry, expectedVersion, file)
+		_ = file.Close()
+		return savedMsg{saved: saved, err: err}
 	}
 }
 
@@ -316,6 +339,16 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus("entry deleted")
 		return m, loadEntriesCmd(m.entries)
 
+	case downloadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.setError(msg.err)
+			return m, nil
+		}
+		m.popScreen() // back to the detail screen
+		m.setStatus("saved to %s", msg.path)
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -335,6 +368,8 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateForm(msg)
 	case screenConfirm:
 		return m.updateConfirm(msg)
+	case screenSave:
+		return m.updateSave(msg)
 	}
 	return m, nil
 }
@@ -353,6 +388,8 @@ func (m appModel) View() string {
 		return m.viewForm()
 	case screenConfirm:
 		return m.viewConfirm()
+	case screenSave:
+		return m.viewSave()
 	default:
 		return m.viewList()
 	}

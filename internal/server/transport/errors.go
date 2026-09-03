@@ -30,6 +30,9 @@ var invalidArgumentErrors = []error{
 	service.ErrEmptyData,
 	service.ErrMetadataTooLong,
 	service.ErrInvalidVersion,
+	service.ErrChunkTooLarge,
+	service.ErrChecksumMismatch,
+	service.ErrEmptyChunkedData,
 }
 
 // toStatusError maps a service-layer error to a gRPC status error.
@@ -67,6 +70,8 @@ func toStatusError(err error) error {
 		return status.Error(codes.AlreadyExists, "entity already exists")
 	case errors.Is(err, model.ErrConflict):
 		return status.Error(codes.FailedPrecondition, "conflict: the entry was modified, re-fetch and retry")
+	case errors.Is(err, service.ErrDataTooLarge):
+		return status.Error(codes.ResourceExhausted, service.ErrDataTooLarge.Error())
 	}
 	for _, sentinel := range invalidArgumentErrors {
 		if errors.Is(err, sentinel) {

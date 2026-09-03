@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 
 	"github.com/dmitriy/gophkeeper/internal/client/gateway"
 	"github.com/dmitriy/gophkeeper/internal/client/model"
@@ -81,9 +84,12 @@ func (s *EntryService) Add(ctx context.Context, entry *model.Entry) (*model.Entr
 	return created, nil
 }
 
-// List returns all entries of the authenticated user.
+// List returns all entries of the authenticated user without payload
+// bytes: entries come with metadata and DataSize, the content of a
+// concrete entry is fetched with Get or Download. This keeps List
+// usable with large binary entries.
 func (s *EntryService) List(ctx context.Context) ([]*model.Entry, error) {
-	entries, err := s.gw.List(ctx)
+	entries, err := s.gw.List(ctx, false)
 	if err != nil {
 		return nil, wrapEntryErr("list", err)
 	}
@@ -131,14 +137,115 @@ func (s *EntryService) Remove(ctx context.Context, id string) error {
 	return nil
 }
 
-// Sync returns the full current set of the user's entries, used by
-// the CLI/TUI to reconcile the local view with the server.
+// Sync returns the full current set of the user's entries without
+// payload bytes (metadata and DataSize only), used by the CLI/TUI to
+// reconcile the local view with the server.
 func (s *EntryService) Sync(ctx context.Context) ([]*model.Entry, error) {
-	entries, err := s.gw.Sync(ctx)
+	entries, err := s.gw.Sync(ctx, false)
 	if err != nil {
 		return nil, wrapEntryErr("sync", err)
 	}
 	return entries, nil
+}
+
+// Upload stores an entry streamed in chunks from r, keeping only one
+// gateway.ChunkSize piece in memory at a time. A zero expectedVersion
+// creates a new entry (entry.ID is ignored); a positive version
+// replaces the payload of the existing entry with the given ID under
+// the optimistic-lock version. entry must carry a valid type, label
+// and metadata; its Data field is ignored.
+func (s *EntryService) Upload(ctx context.Context, entry *model.Entry, expectedVersion int64, r io.Reader) (*model.Entry, error) {
+	if entry == nil {
+		return nil, ErrNilEntry
+	}
+	if !entry.Type.Valid() {
+		return nil, ErrInvalidEntryType
+	}
+	if entry.Label == "" {
+		return nil, ErrEmptyLabel
+	}
+	if len(entry.Label) > maxLabelLen {
+		return nil, ErrLabelTooLong
+	}
+	if len(entry.Metadata) > maxMetadataLen {
+		return nil, ErrMetadataTooLong
+	}
+	if expectedVersion < 0 {
+		return nil, ErrInvalidVersion
+	}
+	if expectedVersion > 0 && entry.ID == "" {
+		return nil, ErrEmptyEntryID
+	}
+
+	stream, err := s.gw.Upload(ctx)
+	if err != nil {
+		return nil, wrapEntryErr("upload", err)
+	}
+	if err := stream.SendHeader(entry, expectedVersion); err != nil {
+		return nil, wrapEntryErr("upload", err)
+	}
+
+	hash := sha256.New()
+	buf := make([]byte, gateway.ChunkSize)
+	sent := false
+	for {
+		n, rerr := r.Read(buf)
+		if n > 0 {
+			chunk := buf[:n]
+			if _, err := hash.Write(chunk); err != nil {
+				return nil, wrapEntryErr("upload", err)
+			}
+			if err := stream.SendChunk(chunk); err != nil {
+				return nil, wrapEntryErr("upload", err)
+			}
+			sent = true
+		}
+		if errors.Is(rerr, io.EOF) {
+			break
+		}
+		if rerr != nil {
+			return nil, wrapEntryErr("upload", rerr)
+		}
+	}
+	if !sent {
+		return nil, ErrEmptyData
+	}
+
+	stored, err := stream.CloseAndCommit(hex.EncodeToString(hash.Sum(nil)))
+	if err != nil {
+		return nil, wrapEntryErr("upload", err)
+	}
+	return stored, nil
+}
+
+// Download streams the payload of the entry with the given id into w
+// without holding it fully in memory. It works for both inline and
+// chunked entries. io.EOF is never returned for a successful download.
+func (s *EntryService) Download(ctx context.Context, id string, w io.Writer) error {
+	if id == "" {
+		return ErrEmptyEntryID
+	}
+	stream, err := s.gw.DownloadEntryData(ctx, id)
+	if err != nil {
+		return wrapEntryErr("download", err)
+	}
+	defer func() { _ = stream.Close() }()
+
+	if _, err := stream.RecvSize(); err != nil {
+		return wrapEntryErr("download", err)
+	}
+	for {
+		chunk, err := stream.RecvChunk()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return wrapEntryErr("download", err)
+		}
+		if _, err := w.Write(chunk); err != nil {
+			return wrapEntryErr("download", err)
+		}
+	}
 }
 
 // validateNewEntry checks an entry being created: type, label,

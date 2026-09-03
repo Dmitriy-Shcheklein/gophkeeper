@@ -39,8 +39,13 @@ type Entry struct {
 	Label string
 	// Metadata is optional user-supplied auxiliary information.
 	Metadata string
-	// Data is the secret payload.
+	// Data is the secret payload. For entries uploaded in chunks it is
+	// empty and the payload lives in entry_chunks; DataSize then
+	// reports the real content size.
 	Data []byte
+	// DataSize is the total payload size in bytes: len(Data) for
+	// inline entries or the summed chunk size for chunked ones.
+	DataSize int64
 	// Version is a monotonically increasing revision used for conflict
 	// detection during synchronization.
 	Version int64
@@ -48,4 +53,20 @@ type Entry struct {
 	CreatedAt time.Time
 	// UpdatedAt is the moment the entry was last modified.
 	UpdatedAt time.Time
+	// State is the upload lifecycle state of the entry.
+	State EntryState
 }
+
+// EntryState is the upload lifecycle state of an entry.
+type EntryState int
+
+const (
+	// EntryStateReady marks a fully uploaded entry, visible to all
+	// reads.
+	EntryStateReady EntryState = 1
+	// EntryStatePending marks an entry whose chunked upload is still in
+	// progress. Pending entries are invisible to List/Get/Sync and are
+	// deleted (cascading their chunks) when an upload fails or is
+	// aborted.
+	EntryStatePending EntryState = 2
+)

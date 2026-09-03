@@ -62,6 +62,14 @@ interactive prompt.`,
 			if err != nil {
 				return err
 			}
+
+			// Binary entries are streamed from the file in chunks, so
+			// arbitrarily large files are stored without loading them
+			// into memory.
+			if entryType == model.EntryTypeBinary {
+				return runAddBinary(cmd, app, opts)
+			}
+
 			data, err := buildAddData(app, entryType, opts)
 			if err != nil {
 				return err
@@ -95,6 +103,43 @@ interactive prompt.`,
 	_ = cmd.MarkFlagRequired("type")
 	_ = cmd.MarkFlagRequired("label")
 	return cmd
+}
+
+// runAddBinary stores a binary entry streamed from --file: the file
+// is read piece by piece (never fully in memory), its SHA-256 digest
+// is verified by the server.
+func runAddBinary(cmd *cobra.Command, app *App, opts *addOptions) error {
+	if err := rejectForeignFlags(opts, "text", "username", "password", "number", "holder", "expiry", "cvv"); err != nil {
+		return err
+	}
+	if opts.file == "" {
+		return errors.New("type binary requires --file=<path>")
+	}
+	file, err := os.Open(opts.file)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() == 0 {
+		return errors.New("binary entry data must not be empty")
+	}
+
+	created, err := app.entries.Upload(cmd.Context(), &model.Entry{
+		Type:     model.EntryTypeBinary,
+		Label:    opts.label,
+		Metadata: opts.metadata,
+	}, 0, file)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(app.Out, "created entry %s (version %d, %d bytes, streamed)\n",
+		shortID(created.ID), created.Version, created.DataSize)
+	return nil
 }
 
 // buildAddData assembles the entry payload for the given type from

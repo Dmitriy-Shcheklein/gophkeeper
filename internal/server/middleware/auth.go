@@ -63,6 +63,42 @@ func NewAuthInterceptor(manager *auth.JWTManager, exemptMethods ...string) grpc.
 	}
 }
 
+// NewAuthStreamInterceptor returns a gRPC stream server interceptor
+// with the same semantics as NewAuthInterceptor: it authenticates the
+// stream using the bearer JWT from the "authorization" metadata key and
+// stores the verified claims in the stream context, which the wrapped
+// handler sees through ServerStream.Context. Exempt method names skip
+// authentication entirely.
+func NewAuthStreamInterceptor(manager *auth.JWTManager, exemptMethods ...string) grpc.StreamServerInterceptor {
+	exempt := make(map[string]struct{}, len(exemptMethods))
+	for _, method := range exemptMethods {
+		exempt[method] = struct{}{}
+	}
+
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if _, ok := exempt[info.FullMethod]; ok {
+			return handler(srv, ss)
+		}
+		claims, err := authenticate(ss.Context(), manager)
+		if err != nil {
+			return status.Error(codes.Unauthenticated, unauthenticatedMessage)
+		}
+		return handler(srv, &claimsServerStream{ServerStream: ss, claims: claims})
+	}
+}
+
+// claimsServerStream wraps a grpc.ServerStream, replacing its context
+// with one carrying the verified claims of the authenticated caller.
+type claimsServerStream struct {
+	grpc.ServerStream
+	claims *auth.Claims
+}
+
+// Context returns the stream context enriched with the claims.
+func (s *claimsServerStream) Context() context.Context {
+	return auth.ContextWithClaims(s.ServerStream.Context(), s.claims)
+}
+
 // authenticate extracts and verifies the bearer token from the incoming
 // metadata, returning the verified claims or one of the err* sentinels
 // describing the failure cause (mapped to a generic gRPC error by the

@@ -21,12 +21,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	EntryService_Create_FullMethodName = "/gophkeeper.v1.EntryService/Create"
-	EntryService_Get_FullMethodName    = "/gophkeeper.v1.EntryService/Get"
-	EntryService_List_FullMethodName   = "/gophkeeper.v1.EntryService/List"
-	EntryService_Update_FullMethodName = "/gophkeeper.v1.EntryService/Update"
-	EntryService_Delete_FullMethodName = "/gophkeeper.v1.EntryService/Delete"
-	EntryService_Sync_FullMethodName   = "/gophkeeper.v1.EntryService/Sync"
+	EntryService_Create_FullMethodName            = "/gophkeeper.v1.EntryService/Create"
+	EntryService_Get_FullMethodName               = "/gophkeeper.v1.EntryService/Get"
+	EntryService_List_FullMethodName              = "/gophkeeper.v1.EntryService/List"
+	EntryService_Update_FullMethodName            = "/gophkeeper.v1.EntryService/Update"
+	EntryService_Delete_FullMethodName            = "/gophkeeper.v1.EntryService/Delete"
+	EntryService_Sync_FullMethodName              = "/gophkeeper.v1.EntryService/Sync"
+	EntryService_Upload_FullMethodName            = "/gophkeeper.v1.EntryService/Upload"
+	EntryService_DownloadEntryData_FullMethodName = "/gophkeeper.v1.EntryService/DownloadEntryData"
 )
 
 // EntryServiceClient is the client API for EntryService service.
@@ -49,6 +51,17 @@ type EntryServiceClient interface {
 	// allowing several authorized clients of the same owner to converge
 	// on the same server state.
 	Sync(ctx context.Context, in *SyncRequest, opts ...grpc.CallOption) (*SyncResponse, error)
+	// Upload stores an entry streamed as chunks (client-streaming):
+	// the first message is an UploadEntryHeader, the rest are payload
+	// chunks. It supports both creating a new entry (expected_version 0)
+	// and replacing the payload of an existing one guarded by
+	// optimistic locking. The whole upload is atomic: the entry becomes
+	// visible only after the stream completes successfully.
+	Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadEntryRequest, UploadEntryResponse], error)
+	// DownloadEntryData streams the payload of a single entry
+	// (server-streaming): the first message is a header with the total
+	// size, the rest are payload chunks.
+	DownloadEntryData(ctx context.Context, in *DownloadEntryDataRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadEntryDataResponse], error)
 }
 
 type entryServiceClient struct {
@@ -119,6 +132,38 @@ func (c *entryServiceClient) Sync(ctx context.Context, in *SyncRequest, opts ...
 	return out, nil
 }
 
+func (c *entryServiceClient) Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadEntryRequest, UploadEntryResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EntryService_ServiceDesc.Streams[0], EntryService_Upload_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadEntryRequest, UploadEntryResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EntryService_UploadClient = grpc.ClientStreamingClient[UploadEntryRequest, UploadEntryResponse]
+
+func (c *entryServiceClient) DownloadEntryData(ctx context.Context, in *DownloadEntryDataRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadEntryDataResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EntryService_ServiceDesc.Streams[1], EntryService_DownloadEntryData_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadEntryDataRequest, DownloadEntryDataResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EntryService_DownloadEntryDataClient = grpc.ServerStreamingClient[DownloadEntryDataResponse]
+
 // EntryServiceServer is the server API for EntryService service.
 // All implementations must embed UnimplementedEntryServiceServer
 // for forward compatibility.
@@ -139,6 +184,17 @@ type EntryServiceServer interface {
 	// allowing several authorized clients of the same owner to converge
 	// on the same server state.
 	Sync(context.Context, *SyncRequest) (*SyncResponse, error)
+	// Upload stores an entry streamed as chunks (client-streaming):
+	// the first message is an UploadEntryHeader, the rest are payload
+	// chunks. It supports both creating a new entry (expected_version 0)
+	// and replacing the payload of an existing one guarded by
+	// optimistic locking. The whole upload is atomic: the entry becomes
+	// visible only after the stream completes successfully.
+	Upload(grpc.ClientStreamingServer[UploadEntryRequest, UploadEntryResponse]) error
+	// DownloadEntryData streams the payload of a single entry
+	// (server-streaming): the first message is a header with the total
+	// size, the rest are payload chunks.
+	DownloadEntryData(*DownloadEntryDataRequest, grpc.ServerStreamingServer[DownloadEntryDataResponse]) error
 	mustEmbedUnimplementedEntryServiceServer()
 }
 
@@ -166,6 +222,12 @@ func (UnimplementedEntryServiceServer) Delete(context.Context, *DeleteEntryReque
 }
 func (UnimplementedEntryServiceServer) Sync(context.Context, *SyncRequest) (*SyncResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Sync not implemented")
+}
+func (UnimplementedEntryServiceServer) Upload(grpc.ClientStreamingServer[UploadEntryRequest, UploadEntryResponse]) error {
+	return status.Error(codes.Unimplemented, "method Upload not implemented")
+}
+func (UnimplementedEntryServiceServer) DownloadEntryData(*DownloadEntryDataRequest, grpc.ServerStreamingServer[DownloadEntryDataResponse]) error {
+	return status.Error(codes.Unimplemented, "method DownloadEntryData not implemented")
 }
 func (UnimplementedEntryServiceServer) mustEmbedUnimplementedEntryServiceServer() {}
 func (UnimplementedEntryServiceServer) testEmbeddedByValue()                      {}
@@ -296,6 +358,24 @@ func _EntryService_Sync_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EntryService_Upload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(EntryServiceServer).Upload(&grpc.GenericServerStream[UploadEntryRequest, UploadEntryResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EntryService_UploadServer = grpc.ClientStreamingServer[UploadEntryRequest, UploadEntryResponse]
+
+func _EntryService_DownloadEntryData_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadEntryDataRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EntryServiceServer).DownloadEntryData(m, &grpc.GenericServerStream[DownloadEntryDataRequest, DownloadEntryDataResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EntryService_DownloadEntryDataServer = grpc.ServerStreamingServer[DownloadEntryDataResponse]
+
 // EntryService_ServiceDesc is the grpc.ServiceDesc for EntryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -328,6 +408,17 @@ var EntryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _EntryService_Sync_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Upload",
+			Handler:       _EntryService_Upload_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "DownloadEntryData",
+			Handler:       _EntryService_DownloadEntryData_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "gophkeeper/v1/service.proto",
 }
