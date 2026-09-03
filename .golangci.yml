@@ -1,0 +1,25 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.26"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - revive
+    - misspell
+  exclusions:
+    rules:
+      - path: internal/common/proto/
+        linters:
+          - errcheck
+          - revive
+        text: ".*"
+
+formatters:
+  enable:
+    - gofumpt

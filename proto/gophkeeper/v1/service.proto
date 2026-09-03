@@ -1,0 +1,82 @@
+// service.proto defines the private-data entry management API of GophKeeper.
+syntax = "proto3";
+
+package gophkeeper.v1;
+
+import "gophkeeper/v1/models.proto";
+
+option go_package = "github.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1";
+
+// CreateEntryRequest contains the entry to store for the authenticated user.
+message CreateEntryRequest {
+  // entry holds the type, label, metadata and data to store.
+  // id, version and timestamps are ignored by the server.
+  Entry entry = 1;
+}
+
+// CreateEntryResponse returns the stored entry as seen by the server.
+message CreateEntryResponse {
+  // entry includes the server-assigned id, version and timestamps.
+  Entry entry = 1;
+}
+
+// GetEntryRequest identifies an entry to fetch.
+message GetEntryRequest {
+  // id is the entry identifier.
+  string id = 1;
+}
+
+// GetEntryResponse returns the requested entry.
+message GetEntryResponse {
+  // entry is the stored entry with all fields populated.
+  Entry entry = 1;
+}
+
+// ListEntriesRequest asks for all entries of the authenticated user.
+message ListEntriesRequest {
+  // Currently no filters; reserved for future pagination.
+}
+
+// ListEntriesResponse returns all entries of the user.
+message ListEntriesResponse {
+  // entries are the user's entries in unspecified order.
+  repeated Entry entries = 1;
+}
+
+// UpdateEntryRequest contains the new entry state for optimistic locking.
+message UpdateEntryRequest {
+  // entry must carry the existing id, label/metadata/data changes
+  // and the version the update is based on.
+  Entry entry = 1;
+}
+
+// UpdateEntryResponse returns the updated entry with a bumped version.
+message UpdateEntryResponse {
+  // entry is the entry after the update.
+  Entry entry = 1;
+}
+
+// DeleteEntryRequest identifies an entry to remove.
+message DeleteEntryRequest {
+  // id is the entry identifier.
+  string id = 1;
+}
+
+// DeleteEntryResponse confirms the deletion.
+message DeleteEntryResponse {
+  // Empty for now; reserved for future use.
+}
+
+// EntryService manages the authenticated user's private data entries.
+service EntryService {
+  // Create stores a new entry for the authenticated user.
+  rpc Create(CreateEntryRequest) returns (CreateEntryResponse);
+  // Get returns a single entry by id.
+  rpc Get(GetEntryRequest) returns (GetEntryResponse);
+  // List returns all entries of the authenticated user.
+  rpc List(ListEntriesRequest) returns (ListEntriesResponse);
+  // Update replaces an entry's content; fails if version is stale.
+  rpc Update(UpdateEntryRequest) returns (UpdateEntryResponse);
+  // Delete removes an entry by id.
+  rpc Delete(DeleteEntryRequest) returns (DeleteEntryResponse);
+}
