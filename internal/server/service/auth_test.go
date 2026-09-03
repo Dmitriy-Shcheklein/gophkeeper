@@ -179,6 +179,15 @@ func TestLoginValidation(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestDummyHashIsWellFormed(t *testing.T) {
+	// A malformed dummy hash would fail fast and defeat the timing
+	// side-channel defense, so it must parse as a valid bcrypt hash at
+	// the default cost (mismatch is expected and fine).
+	err := bcrypt.CompareHashAndPassword(dummyHash, []byte("whatever"))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bcrypt.ErrMismatchedHashAndPassword)
+}
+
 func TestRegisterRepoErrorPropagates(t *testing.T) {
 	repo := newMockUserRepo()
 	repo.createErr = errors.New("boom")

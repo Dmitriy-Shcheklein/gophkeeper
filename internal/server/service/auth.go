@@ -43,6 +43,13 @@ const (
 	maxPasswordLen = 72
 )
 
+// dummyHash is a precomputed bcrypt hash of an arbitrary secret value.
+// It is compared against the supplied password on the unknown-login path
+// of Login to equalize the work done there with the wrong-password path
+// (timing side-channel defense). Its value is intentionally fixed and
+// corresponds to no real account.
+var dummyHash = []byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
+
 // AuthService implements register/login business logic.
 type AuthService struct {
 	users repository.UserRepository
@@ -101,6 +108,11 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (string
 	user, err := s.users.GetByLogin(ctx, login)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
+			// Timing side-channel defense: perform a bcrypt compare
+			// against a fixed dummy hash so the not-found path takes
+			// roughly as long as the wrong-password path, keeping the
+			// returned error identical (no user enumeration).
+			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 			return "", fmt.Errorf("service: login: %w: %w", model.ErrUnauthorized, ErrInvalidCredentials)
 		}
 		return "", fmt.Errorf("service: get user: %w", err)

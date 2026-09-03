@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -20,41 +21,69 @@ const authorizationHeader = "authorization"
 // bearerPrefix is the expected token scheme, followed by a space.
 const bearerPrefix = "Bearer "
 
+// unauthenticatedMessage is the generic gRPC error message returned for
+// every authentication failure, deliberately free of details.
+const unauthenticatedMessage = "authentication required"
+
+// authenticate failure causes.
+var (
+	errMissingMetadata   = errors.New("no incoming metadata")
+	errMissingAuthHeader = errors.New("missing authorization header")
+	errInvalidAuthHeader = errors.New("invalid authorization header")
+	errInvalidToken      = errors.New("invalid token")
+)
+
 // NewAuthInterceptor returns a gRPC unary server interceptor that
 // authenticates requests using a bearer JWT from the "authorization"
 // metadata key ("Bearer <token>" format). On success the verified
 // claims are stored in the request context (see
 // auth.ContextWithClaims); on failure the interceptor aborts the call
-// with codes.Unauthenticated without exposing JWT error details.
-func NewAuthInterceptor(jwt *auth.JWTManager) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		claims, err := authenticate(ctx, jwt)
+// with codes.Unauthenticated and a generic message, without exposing
+// JWT error details.
+//
+// The exemptMethods variadic lists full method names (e.g.
+// "/gophkeeperv1.AuthService/Register") that skip authentication
+// entirely; such calls proceed without claims in the context. Pass no
+// arguments to protect every method.
+func NewAuthInterceptor(manager *auth.JWTManager, exemptMethods ...string) grpc.UnaryServerInterceptor {
+	exempt := make(map[string]struct{}, len(exemptMethods))
+	for _, method := range exemptMethods {
+		exempt[method] = struct{}{}
+	}
+
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if _, ok := exempt[info.FullMethod]; ok {
+			return handler(ctx, req)
+		}
+		claims, err := authenticate(ctx, manager)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "authentication required")
+			return nil, status.Error(codes.Unauthenticated, unauthenticatedMessage)
 		}
 		return handler(auth.ContextWithClaims(ctx, claims), req)
 	}
 }
 
 // authenticate extracts and verifies the bearer token from the incoming
-// metadata, returning the verified claims.
-func authenticate(ctx context.Context, jwt *auth.JWTManager) (*auth.Claims, error) {
+// metadata, returning the verified claims or one of the err* sentinels
+// describing the failure cause (mapped to a generic gRPC error by the
+// caller).
+func authenticate(ctx context.Context, manager *auth.JWTManager) (*auth.Claims, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "missing metadata")
+		return nil, errMissingMetadata
 	}
 	values := md.Get(authorizationHeader)
 	if len(values) == 0 {
-		return nil, status.Error(codes.Unauthenticated, "missing authorization header")
+		return nil, errMissingAuthHeader
 	}
 	// Multiple authorization values are ambiguous; use the first one.
 	token, ok := strings.CutPrefix(values[0], bearerPrefix)
 	if !ok || token == "" {
-		return nil, status.Error(codes.Unauthenticated, "invalid authorization header")
+		return nil, errInvalidAuthHeader
 	}
-	claims, err := jwt.Verify(token)
+	claims, err := manager.Verify(token)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid token")
+		return nil, errInvalidToken
 	}
 	return claims, nil
 }

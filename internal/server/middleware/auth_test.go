@@ -24,15 +24,16 @@ func handler(ctx context.Context, captured *context.Context) (any, error) {
 }
 
 // invoke runs the interceptor with the given metadata (nil means no
-// metadata) and returns the context seen by the handler.
-func invoke(t *testing.T, interceptor grpc.UnaryServerInterceptor, md metadata.MD) (context.Context, error) {
+// metadata) for the given full method name and returns the context seen
+// by the handler.
+func invoke(t *testing.T, interceptor grpc.UnaryServerInterceptor, method string, md metadata.MD) (context.Context, error) {
 	t.Helper()
 	ctx := context.Background()
 	if md != nil {
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	var captured context.Context
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test/method"}, func(ctx context.Context, _ any) (any, error) {
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: method}, func(ctx context.Context, _ any) (any, error) {
 		return handler(ctx, &captured)
 	})
 	return captured, err
@@ -61,7 +62,7 @@ func TestInterceptorValidToken(t *testing.T) {
 	token, err := mgr.Generate("user-1", "alice")
 	require.NoError(t, err)
 
-	captured, err := invoke(t, NewAuthInterceptor(mgr), metadata.Pairs("authorization", "Bearer "+token))
+	captured, err := invoke(t, NewAuthInterceptor(mgr), "/test/method", metadata.Pairs("authorization", "Bearer "+token))
 	require.NoError(t, err)
 
 	claims, ok := auth.ClaimsFromContext(captured)
@@ -92,11 +93,41 @@ func TestInterceptorUnauthenticated(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := invoke(t, interceptor, tt.md)
+			_, err := invoke(t, interceptor, "/test/method", tt.md)
 			require.Error(t, err)
 			assert.Equal(t, codes.Unauthenticated, status.Code(err))
 			// The message must be generic: no JWT internals leaked.
 			assert.Equal(t, "authentication required", status.Convert(err).Message())
 		})
 	}
+}
+
+func TestInterceptorExemptMethods(t *testing.T) {
+	mgr, err := auth.New("test-secret", time.Minute)
+	require.NoError(t, err)
+	interceptor := NewAuthInterceptor(mgr, "/test/public", "/test/other/public")
+
+	t.Run("exempt method without token passes through", func(t *testing.T) {
+		captured, err := invoke(t, interceptor, "/test/public", nil)
+		require.NoError(t, err)
+		// No claims in the context for exempt methods.
+		_, ok := auth.ClaimsFromContext(captured)
+		assert.False(t, ok)
+	})
+
+	t.Run("non-exempt method without token still rejected", func(t *testing.T) {
+		_, err := invoke(t, interceptor, "/test/private", nil)
+		require.Error(t, err)
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	})
+
+	t.Run("exempt method with valid token passes through", func(t *testing.T) {
+		token, err := mgr.Generate("user-1", "alice")
+		require.NoError(t, err)
+		captured, err := invoke(t, interceptor, "/test/public", metadata.Pairs("authorization", "Bearer "+token))
+		require.NoError(t, err)
+		// Still no claims injected for exempt methods.
+		_, ok := auth.ClaimsFromContext(captured)
+		assert.False(t, ok)
+	})
 }
