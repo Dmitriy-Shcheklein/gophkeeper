@@ -88,6 +88,19 @@ func validEntry() *model.Entry {
 	}
 }
 
+// validEditedEntry returns an entry passing all Edit validation
+// rules: non-empty ID and a version of at least 1 on top of the
+// shared content rules.
+func validEditedEntry() *model.Entry {
+	e := validEntry()
+	e.ID = "e1"
+	e.Type = model.EntryTypeText
+	e.Label = "github"
+	e.Data = []byte("payload")
+	e.Version = 1
+	return e
+}
+
 func TestEntryServiceAddSuccess(t *testing.T) {
 	out := &model.Entry{ID: "e1", Label: "github", Version: 1}
 	gw := &fakeEntryGateway{createOut: out}
@@ -104,29 +117,47 @@ func TestEntryServiceAddSuccess(t *testing.T) {
 func TestEntryServiceAddValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		mutate  func(e *model.Entry)
+		entry   func() *model.Entry
 		wantErr error
 	}{
-		{"nil entry", func(_ *model.Entry) {}, ErrEmptyData},
-		{"unspecified type", func(e *model.Entry) { e.Type = model.EntryTypeUnspecified }, ErrInvalidEntryType},
-		{"invalid type", func(e *model.Entry) { e.Type = model.EntryType(42) }, ErrInvalidEntryType},
-		{"empty label", func(e *model.Entry) { e.Label = "" }, ErrEmptyLabel},
-		{"label too long", func(e *model.Entry) { e.Label = strings.Repeat("x", 256) }, ErrLabelTooLong},
-		{"metadata too long", func(e *model.Entry) { e.Metadata = strings.Repeat("x", 10001) }, ErrMetadataTooLong},
-		{"empty data", func(e *model.Entry) { e.Data = nil }, ErrEmptyData},
+		{"nil entry", func() *model.Entry { return nil }, ErrNilEntry},
+		{"unspecified type", func() *model.Entry {
+			e := validEntry()
+			e.Type = model.EntryTypeUnspecified
+			return e
+		}, ErrInvalidEntryType},
+		{"invalid type", func() *model.Entry {
+			e := validEntry()
+			e.Type = model.EntryType(42)
+			return e
+		}, ErrInvalidEntryType},
+		{"empty label", func() *model.Entry {
+			e := validEntry()
+			e.Label = ""
+			return e
+		}, ErrEmptyLabel},
+		{"label too long", func() *model.Entry {
+			e := validEntry()
+			e.Label = strings.Repeat("x", 256)
+			return e
+		}, ErrLabelTooLong},
+		{"metadata too long", func() *model.Entry {
+			e := validEntry()
+			e.Metadata = strings.Repeat("x", 10001)
+			return e
+		}, ErrMetadataTooLong},
+		{"empty data", func() *model.Entry {
+			e := validEntry()
+			e.Data = nil
+			return e
+		}, ErrEmptyData},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gw := &fakeEntryGateway{}
 			svc := NewEntryService(gw)
-			entry := validEntry()
-			if tt.name == "nil entry" {
-				entry = nil
-			} else {
-				tt.mutate(entry)
-			}
 
-			_, err := svc.Add(context.Background(), entry)
+			_, err := svc.Add(context.Background(), tt.entry())
 
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.Nil(t, gw.lastCreate, "gateway must not be called on validation failure")
@@ -221,39 +252,57 @@ func TestEntryServiceEditSuccessPassesVersion(t *testing.T) {
 func TestEntryServiceEditValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		mutate  func(e *model.Entry)
+		entry   func() *model.Entry
 		wantErr error
 	}{
-		{"nil entry", func(_ *model.Entry) {}, ErrEmptyEntryID},
-		{"empty id", func(_ *model.Entry) {}, ErrEmptyEntryID},
-		{"zero version", func(e *model.Entry) { e.Version = 0 }, ErrInvalidVersion},
-		{"negative version", func(e *model.Entry) { e.Version = -1 }, ErrInvalidVersion},
-		{"invalid type", func(e *model.Entry) { e.Type = model.EntryType(42) }, ErrInvalidEntryType},
-		{"empty label", func(e *model.Entry) { e.Label = "" }, ErrEmptyLabel},
-		{"label too long", func(e *model.Entry) { e.Label = strings.Repeat("x", 256) }, ErrLabelTooLong},
-		{"metadata too long", func(e *model.Entry) { e.Metadata = strings.Repeat("x", 10001) }, ErrMetadataTooLong},
-		{"empty data", func(e *model.Entry) { e.Data = nil }, ErrEmptyData},
+		{"nil entry", func() *model.Entry { return nil }, ErrNilEntry},
+		{"empty id", func() *model.Entry {
+			e := validEditedEntry()
+			e.ID = ""
+			return e
+		}, ErrEmptyEntryID},
+		{"zero version", func() *model.Entry {
+			e := validEditedEntry()
+			e.Version = 0
+			return e
+		}, ErrInvalidVersion},
+		{"negative version", func() *model.Entry {
+			e := validEditedEntry()
+			e.Version = -1
+			return e
+		}, ErrInvalidVersion},
+		{"invalid type", func() *model.Entry {
+			e := validEditedEntry()
+			e.Type = model.EntryType(42)
+			return e
+		}, ErrInvalidEntryType},
+		{"empty label", func() *model.Entry {
+			e := validEditedEntry()
+			e.Label = ""
+			return e
+		}, ErrEmptyLabel},
+		{"label too long", func() *model.Entry {
+			e := validEditedEntry()
+			e.Label = strings.Repeat("x", 256)
+			return e
+		}, ErrLabelTooLong},
+		{"metadata too long", func() *model.Entry {
+			e := validEditedEntry()
+			e.Metadata = strings.Repeat("x", 10001)
+			return e
+		}, ErrMetadataTooLong},
+		{"empty data", func() *model.Entry {
+			e := validEditedEntry()
+			e.Data = nil
+			return e
+		}, ErrEmptyData},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gw := &fakeEntryGateway{}
 			svc := NewEntryService(gw)
-			entry := &model.Entry{
-				ID:      "e1",
-				Type:    model.EntryTypeText,
-				Label:   "github",
-				Data:    []byte("payload"),
-				Version: 1,
-			}
-			if tt.name == "empty id" {
-				entry.ID = ""
-			}
-			if tt.name == "nil entry" {
-				entry = nil
-			}
-			tt.mutate(entry)
 
-			_, err := svc.Edit(context.Background(), entry)
+			_, err := svc.Edit(context.Background(), tt.entry())
 
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.Nil(t, gw.lastUpdate, "gateway must not be called on validation failure")
@@ -377,9 +426,25 @@ func TestEntryServiceErrorPropagation(t *testing.T) {
 	}
 }
 
-// TestEntryValidationErrorParity documents that the client limits
-// mirror the server-side service rules; it guards against the two
-// drifting apart silently.
+// TestEntryErrorMessageCarriesOperationContext checks that a
+// wrapped gateway error keeps its sentinel reachable via errors.Is
+// and names the failed operation in its message.
+func TestEntryErrorMessageCarriesOperationContext(t *testing.T) {
+	svc := NewEntryService(&fakeEntryGateway{createErr: gateway.ErrConflict})
+
+	_, err := svc.Add(context.Background(), validEntry())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, gateway.ErrConflict)
+	assert.Equal(t, "service: create entry: entry was modified, re-fetch and retry", err.Error())
+}
+
+// TestEntryValidationErrorParity pins the client-side limits and
+// sentinel wording. The client deliberately does not import the
+// server packages, so there is no automated cross-check against
+// internal/server/service: parity of the validation rules with the
+// server is verified by hand during review, and this test only
+// guards the client's own constants against accidental edits.
 func TestEntryValidationErrorParity(t *testing.T) {
 	assert.Equal(t, maxLabelLen, 255)
 	assert.Equal(t, maxMetadataLen, 10000)
@@ -390,4 +455,5 @@ func TestEntryValidationErrorParity(t *testing.T) {
 	assert.Equal(t, ErrInvalidEntryType.Error(), "invalid entry type")
 	assert.Equal(t, ErrEmptyEntryID.Error(), "entry id must not be empty")
 	assert.Equal(t, ErrInvalidVersion.Error(), "version must be at least 1")
+	assert.Equal(t, ErrNilEntry.Error(), "entry must not be nil")
 }

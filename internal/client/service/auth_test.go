@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -150,6 +152,16 @@ func TestAuthServiceRegisterPropagatesGatewayError(t *testing.T) {
 	assert.False(t, svc.IsAuthenticated())
 }
 
+func TestAuthServiceLoginPropagatesGatewayError(t *testing.T) {
+	svc, gw := newTestAuthService(t)
+	gw.loginErr = errors.New("boom")
+
+	err := svc.Login(context.Background(), "bob", "hunter2")
+
+	assert.ErrorIs(t, err, gw.loginErr)
+	assert.False(t, svc.IsAuthenticated())
+}
+
 func TestAuthServiceLogoutClearsStoreAndMemory(t *testing.T) {
 	svc, gw := newTestAuthService(t)
 	gw.token = "token-3"
@@ -161,6 +173,23 @@ func TestAuthServiceLogoutClearsStoreAndMemory(t *testing.T) {
 	assert.False(t, svc.IsAuthenticated())
 	_, loadErr := svc.store.Load()
 	assert.ErrorIs(t, loadErr, token.ErrNoToken, "persisted token must be removed")
+}
+
+func TestAuthServiceLogoutPropagatesStoreClearFailure(t *testing.T) {
+	gw := &fakeAuthGateway{}
+	gw.token = "token-4"
+	// A non-empty directory at the token path makes Store.Clear fail:
+	// os.Remove cannot remove a directory that is not empty.
+	store, err := token.New(filepath.Join(t.TempDir(), "token"))
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(store.Path(), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(store.Path(), "blocker"), []byte("x"), 0o600))
+	svc := NewAuthService(gw, store)
+
+	err = svc.Logout()
+
+	assert.Error(t, err)
+	assert.True(t, gw.HasToken(), "in-memory token must survive a failed logout")
 }
 
 func TestAuthServiceLogoutIsIdempotent(t *testing.T) {
@@ -197,5 +226,34 @@ func TestAuthServiceRestoreWithoutSavedTokenStaysUnauthenticated(t *testing.T) {
 	err := svc.Restore()
 
 	require.NoError(t, err, "no saved token is a normal state, not an error")
+	assert.False(t, svc.IsAuthenticated())
+}
+
+func TestAuthServiceRestoreWithEmptySavedTokenStaysUnauthenticated(t *testing.T) {
+	store, err := token.New(t.TempDir() + "/token")
+	require.NoError(t, err)
+	require.NoError(t, store.Save(""))
+	gw := &fakeAuthGateway{}
+	svc := NewAuthService(gw, store)
+
+	err = svc.Restore()
+
+	require.NoError(t, err, "an empty persisted token is no token")
+	assert.False(t, svc.IsAuthenticated())
+}
+
+func TestAuthServiceRestorePropagatesReadFailure(t *testing.T) {
+	// A non-empty directory at the token path makes Store.Load fail:
+	// reading a directory is an error on Unix systems.
+	store, err := token.New(filepath.Join(t.TempDir(), "token"))
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(store.Path(), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(store.Path(), "blocker"), []byte("x"), 0o600))
+	svc, _ := newTestAuthService(t)
+	svc.store = store
+
+	err = svc.Restore()
+
+	assert.Error(t, err, "a genuine read failure must reach the caller")
 	assert.False(t, svc.IsAuthenticated())
 }

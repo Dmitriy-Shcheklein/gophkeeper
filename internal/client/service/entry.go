@@ -23,6 +23,10 @@ const (
 // wording mirrors the server-side sentinels; the CLI maps them to
 // friendly messages.
 var (
+	// ErrNilEntry is returned by Add and Edit when the entry argument
+	// is nil: there is nothing to validate or send, and reporting it
+	// as a label or id problem would mislead the caller.
+	ErrNilEntry = errors.New("entry must not be nil")
 	// ErrEmptyEntryID is returned by Get, Edit and Remove when the
 	// entry id is empty.
 	ErrEmptyEntryID = errors.New("entry id must not be empty")
@@ -141,7 +145,7 @@ func (s *EntryService) Sync(ctx context.Context) ([]*model.Entry, error) {
 // metadata and data.
 func validateNewEntry(entry *model.Entry) error {
 	if entry == nil {
-		return ErrEmptyData
+		return ErrNilEntry
 	}
 	if !entry.Type.Valid() {
 		return ErrInvalidEntryType
@@ -154,7 +158,7 @@ func validateNewEntry(entry *model.Entry) error {
 // the type is immutable on update) and the shared content rules.
 func validateEditedEntry(entry *model.Entry) error {
 	if entry == nil {
-		return ErrEmptyEntryID
+		return ErrNilEntry
 	}
 	if entry.ID == "" {
 		return ErrEmptyEntryID
