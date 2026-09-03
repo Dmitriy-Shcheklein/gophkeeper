@@ -88,6 +88,9 @@ func MaskCVV(cvv string) string {
 
 // LoginData is the JSON payload of a login entry. The JSON keys are
 // fixed by the format contract (see the package docs).
+//
+// Keep in sync: the payload-format tables in README.md and
+// docs/protocol.md document these formats too.
 type LoginData struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

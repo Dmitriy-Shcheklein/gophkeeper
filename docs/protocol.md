@@ -72,7 +72,7 @@ authorization: Bearer <access_token>
 | `id`        | string      | серверный идентификатор записи                               |
 | `type`      | `EntryType` | интерпретация payload'а (см. ниже)                           |
 | `label`     | string      | пользовательское имя записи (не пусто)                       |
-| `metadata`  | string      | произвольная текстовая метаданные                            |
+| `metadata`  | string      | произвольные текстовые метаданные                            |
 | `data`      | bytes       | payload записи (формат зависит от `type`)                    |
 | `version`   | int64       | инкрементируется при каждом обновлении; для `Update` обязателен |
 | `created_at`| int64       | создание, Unix-секунды UTC                                   |
@@ -103,7 +103,7 @@ authorization: Bearer <access_token>
 | gRPC-код              | Когда возвращается                                                                 |
 |-----------------------|-------------------------------------------------------------------------------------|
 | `InvalidArgument`     | пустой/слишком длинный логин или label, слишком короткий/длинный пароль, пустые `data`, пустой id записи, неизвестный `EntryType`, `version < 1`, слишком длинные metadata |
-| `Unauthenticated`     | нет заголовка `authorization`, невалидный/просроченный JWT (`authentication required`), неверный логин или пароль при `Login`/`Register` |
+| `Unauthenticated`     | нет заголовка `authorization`, невалидный/просроченный JWT (`authentication required`), неверный логин или пароль при `Login` |
 | `NotFound`            | запись не найдена (`Get`/`Update`/`Delete`)                                          |
 | `AlreadyExists`       | логин уже занят при `Register`                                                       |
 | `FailedPrecondition`  | конфликт версий при `Update` (entry изменён другим клиентом; нужно перечитать и повторить) |

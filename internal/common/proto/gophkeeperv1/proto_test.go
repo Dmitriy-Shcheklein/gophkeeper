@@ -45,7 +45,13 @@ func sampleUser() *gophkeeperv1.User {
 func TestMessageRoundTrip(t *testing.T) {
 	entry := sampleEntry()
 
-	msgs := []proto.Message{
+	// Every generated message embeds protoreflect.ProtoMessage, which
+	// carries the String() method, so the combined interface lets the
+	// loop call both proto.Marshal and String directly.
+	msgs := []interface {
+		proto.Message
+		String() string
+	}{
 		&gophkeeperv1.RegisterRequest{Login: "alice", Password: "secret"},
 		&gophkeeperv1.RegisterResponse{User: sampleUser(), AccessToken: "tok"},
 		&gophkeeperv1.LoginRequest{Login: "alice", Password: "secret"},
@@ -69,16 +75,14 @@ func TestMessageRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshal %T: %v", m, err)
 		}
-		fresh := proto.Clone(m).ProtoReflect().New().Interface()
+		fresh := m.ProtoReflect().New().Interface()
 		if err := proto.Unmarshal(data, fresh); err != nil {
 			t.Fatalf("unmarshal %T: %v", m, err)
 		}
 		if !proto.Equal(m, fresh) {
 			t.Errorf("%T did not survive a marshal/unmarshal round trip", m)
 		}
-		if s, ok := m.(interface{ String() string }); ok {
-			_ = s.String() // smoke-check: String() must not panic, even for empty messages
-		}
+		_ = m.String() // smoke-check: String() must not panic, even for empty messages
 	}
 }
 
@@ -235,8 +239,11 @@ func TestRPCOverWire(t *testing.T) {
 	if _, err := entries.Create(ctx, &gophkeeperv1.CreateEntryRequest{Entry: entry}); err != nil {
 		t.Errorf("Create: %v", err)
 	}
-	if _, err := entries.Get(ctx, &gophkeeperv1.GetEntryRequest{Id: entry.GetId()}); err != nil {
+	got, err := entries.Get(ctx, &gophkeeperv1.GetEntryRequest{Id: entry.GetId()})
+	if err != nil {
 		t.Errorf("Get: %v", err)
+	} else if !proto.Equal(got.GetEntry(), entry) {
+		t.Errorf("Get response entry = %+v, want %+v", got.GetEntry(), entry)
 	}
 	if _, err := entries.List(ctx, &gophkeeperv1.ListEntriesRequest{}); err != nil {
 		t.Errorf("List: %v", err)
