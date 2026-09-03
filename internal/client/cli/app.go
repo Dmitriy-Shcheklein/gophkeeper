@@ -89,6 +89,11 @@ type App struct {
 	// is used by register and login when --password is omitted.
 	PromptPassword func() (string, error)
 
+	// runTUI launches the interactive TUI; nil in production (the
+	// command calls tui.Run directly). Tests inject a stub so the
+	// authenticated path can be verified without a terminal.
+	runTUI func(auth authClient, entries entryClient) error
+
 	// serverFlag and tokenFlag receive the values of the root
 	// command's persistent flags (--server, --token-path); empty
 	// when the flags are not set.

@@ -425,12 +425,30 @@ func TestVersionCommand(t *testing.T) {
 	require.Contains(t, text, "platform: ")
 }
 
-func TestTUICommandStub(t *testing.T) {
-	app, out, _ := newTestApp(&fakeAuth{}, newFakeEntries())
+func TestTUICommandRequiresAuthentication(t *testing.T) {
+	app, _, errOut := newTestApp(&fakeAuth{}, newFakeEntries())
+
+	_, _, err := run(t, app, "tui")
+	require.Error(t, err)
+	require.Contains(t, errOut.String(), "not authenticated, run `gophkeeper login`")
+}
+
+func TestTUICommandLaunchesWithServices(t *testing.T) {
+	app, _, _ := newTestApp(&fakeAuth{token: "saved"}, newFakeEntries())
+	var called bool
+	var gotAuth authClient
+	var gotEntries entryClient
+	app.runTUI = func(auth authClient, entries entryClient) error {
+		called = true
+		gotAuth, gotEntries = auth, entries
+		return nil
+	}
 
 	_, _, err := run(t, app, "tui")
 	require.NoError(t, err)
-	require.Equal(t, "TUI is not implemented yet\n", out.String())
+	require.True(t, called)
+	require.Same(t, app.auth, gotAuth)
+	require.Same(t, app.entries, gotEntries)
 }
 
 func TestHelpAvailableWithoutServices(t *testing.T) {

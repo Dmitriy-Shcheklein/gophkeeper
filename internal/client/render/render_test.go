@@ -1,4 +1,4 @@
-package cli
+package render
 
 import (
 	"bytes"
@@ -10,24 +10,24 @@ import (
 )
 
 func TestShortID(t *testing.T) {
-	require.Equal(t, "", shortID(""))
-	require.Equal(t, "abc", shortID("abc"))
-	require.Equal(t, "12345678", shortID("12345678"))
-	require.Equal(t, "12345678", shortID("1234567890abcdef"))
+	require.Equal(t, "", ShortID(""))
+	require.Equal(t, "abc", ShortID("abc"))
+	require.Equal(t, "12345678", ShortID("12345678"))
+	require.Equal(t, "12345678", ShortID("1234567890abcdef"))
 }
 
 func TestMaskCardNumber(t *testing.T) {
-	require.Equal(t, "", maskCardNumber(""))
-	require.Equal(t, "*", maskCardNumber("1"))
-	require.Equal(t, "****", maskCardNumber("1234"))
-	require.Equal(t, "*2345", maskCardNumber("12345"))
-	require.Equal(t, "************1111", maskCardNumber("4111111111111111"))
+	require.Equal(t, "", MaskCardNumber(""))
+	require.Equal(t, "*", MaskCardNumber("1"))
+	require.Equal(t, "****", MaskCardNumber("1234"))
+	require.Equal(t, "*2345", MaskCardNumber("12345"))
+	require.Equal(t, "************1111", MaskCardNumber("4111111111111111"))
 }
 
 func TestMaskCVV(t *testing.T) {
-	require.Equal(t, "", maskCVV(""))
-	require.Equal(t, "***", maskCVV("123"))
-	require.Equal(t, "****", maskCVV("1234"))
+	require.Equal(t, "", MaskCVV(""))
+	require.Equal(t, "***", MaskCVV("123"))
+	require.Equal(t, "****", MaskCVV("1234"))
 }
 
 func TestTableRender(t *testing.T) {
@@ -54,7 +54,7 @@ func TestTableRenderEmpty(t *testing.T) {
 
 func TestRenderTableEmpty(t *testing.T) {
 	var out bytes.Buffer
-	renderTable(&out, nil)
+	Table(&out, nil)
 	require.Equal(t, "no entries\n", out.String())
 }
 
@@ -65,7 +65,7 @@ func TestRenderTable(t *testing.T) {
 		{ID: "bbbbbbbb-2222", Type: model.EntryTypeCard, Label: "bank", Version: 1, UpdatedAt: updated},
 	}
 	var out bytes.Buffer
-	renderTable(&out, entries)
+	Table(&out, entries)
 
 	lines := splitLines(out.String())
 	require.Len(t, lines, 4)
@@ -78,10 +78,10 @@ func TestRenderTable(t *testing.T) {
 }
 
 func TestRenderEntryLogin(t *testing.T) {
-	data, err := encodeLogin("alice", "s3cret")
+	data, err := EncodeLogin("alice", "s3cret")
 	require.NoError(t, err)
 	var out bytes.Buffer
-	renderEntry(&out, &model.Entry{
+	Entry(&out, &model.Entry{
 		ID: "id-123456789", Type: model.EntryTypeLoginPassword, Label: "github",
 		Metadata: "work", Version: 2,
 		CreatedAt: time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC),
@@ -101,10 +101,10 @@ func TestRenderEntryLogin(t *testing.T) {
 }
 
 func TestRenderEntryCardMasks(t *testing.T) {
-	data, err := encodeCard("4111111111111111", "Alice Smith", "12/28", "123")
+	data, err := EncodeCard("4111111111111111", "Alice Smith", "12/28", "123")
 	require.NoError(t, err)
 	var out bytes.Buffer
-	renderEntry(&out, &model.Entry{
+	Entry(&out, &model.Entry{
 		ID: "id-1", Type: model.EntryTypeCard, Label: "bank", Version: 1, Data: data,
 	})
 
@@ -120,18 +120,53 @@ func TestRenderEntryCardMasks(t *testing.T) {
 
 func TestRenderEntryTextAndBinary(t *testing.T) {
 	var out bytes.Buffer
-	renderEntry(&out, &model.Entry{ID: "id-2", Type: model.EntryTypeText, Label: "note", Data: []byte("hello world")})
+	Entry(&out, &model.Entry{ID: "id-2", Type: model.EntryTypeText, Label: "note", Data: []byte("hello world")})
 	require.Contains(t, out.String(), "hello world")
 
 	out.Reset()
-	renderEntry(&out, &model.Entry{ID: "id-3", Type: model.EntryTypeBinary, Label: "file", Data: []byte("0123456789")})
+	Entry(&out, &model.Entry{ID: "id-3", Type: model.EntryTypeBinary, Label: "file", Data: []byte("0123456789")})
 	require.Contains(t, out.String(), "binary data (10 bytes)")
 }
 
 func TestRenderEntryUndecodable(t *testing.T) {
 	var out bytes.Buffer
-	renderEntry(&out, &model.Entry{ID: "id-4", Type: model.EntryTypeLoginPassword, Label: "bad", Data: []byte("junk")})
+	Entry(&out, &model.Entry{ID: "id-4", Type: model.EntryTypeLoginPassword, Label: "bad", Data: []byte("junk")})
 	require.Contains(t, out.String(), "undecodable login data")
+}
+
+func TestRenderEntryString(t *testing.T) {
+	e := &model.Entry{ID: "id-5", Type: model.EntryTypeText, Label: "note", Data: []byte("hello")}
+	require.Contains(t, EntryString(e), "hello")
+}
+
+func TestTypeLabel(t *testing.T) {
+	require.Equal(t, "login", TypeLabel(model.EntryTypeLoginPassword))
+	require.Equal(t, "text", TypeLabel(model.EntryTypeText))
+	require.Equal(t, "binary", TypeLabel(model.EntryTypeBinary))
+	require.Equal(t, "card", TypeLabel(model.EntryTypeCard))
+	require.Equal(t, "unknown", TypeLabel(model.EntryTypeUnspecified))
+}
+
+func TestParseType(t *testing.T) {
+	got, err := ParseType("login")
+	require.NoError(t, err)
+	require.Equal(t, model.EntryTypeLoginPassword, got)
+
+	got, err = ParseType("text")
+	require.NoError(t, err)
+	require.Equal(t, model.EntryTypeText, got)
+
+	got, err = ParseType("binary")
+	require.NoError(t, err)
+	require.Equal(t, model.EntryTypeBinary, got)
+
+	got, err = ParseType("card")
+	require.NoError(t, err)
+	require.Equal(t, model.EntryTypeCard, got)
+
+	_, err = ParseType("nope")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `invalid type "nope"`)
 }
 
 // splitLines splits rendered output into non-empty lines.
