@@ -29,6 +29,19 @@ const (
 	EntryTypeCard EntryType = 4
 )
 
+// Valid reports whether t is one of the supported entry types. The
+// zero value EntryTypeUnspecified is not valid: it must not be sent
+// to the server explicitly. The semantics mirror the server-side
+// model (see internal/server/model).
+func (t EntryType) Valid() bool {
+	switch t {
+	case EntryTypeLoginPassword, EntryTypeText, EntryTypeBinary, EntryTypeCard:
+		return true
+	default:
+		return false
+	}
+}
+
 // Entry is a single piece of the user's private data, as seen by the
 // client. The payload is carried in Data; its meaning is determined
 // by Type.
