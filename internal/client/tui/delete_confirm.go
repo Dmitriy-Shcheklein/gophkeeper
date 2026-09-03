@@ -54,6 +54,6 @@ func (m appModel) viewConfirm() string {
 	_, _ = fmt.Fprintf(&sb, "Delete %s entry %q?\n\n",
 		render.TypeLabel(m.confirm.entry.Type), m.confirm.entry.Label)
 	sb.WriteString(statusErrStyle.Render("This cannot be undone.") + "\n")
-	sb.WriteString(helpStyle.Render("y confirm · n/esc cancel"))
+	sb.WriteString(helpStyle.Render("y confirm · n/esc/q cancel"))
 	return sb.String()
 }

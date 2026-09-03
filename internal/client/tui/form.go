@@ -49,12 +49,25 @@ type formModel struct {
 	source *model.Entry
 }
 
+// secretFieldNames are the form fields whose input is echoed as
+// asterisks (the password and the card CVV).
+var secretFieldNames = map[string]bool{
+	"Password": true,
+	"CVV":      true,
+}
+
 // newInput builds a labelled text input with an optional value.
+// Secret fields (password, CVV) are masked; everything else echoes
+// in the clear.
 func newInput(name, placeholder, value string) formField {
 	ti := textinput.New()
 	ti.Placeholder = placeholder
 	ti.SetValue(value)
 	ti.CharLimit = 0
+	if secretFieldNames[name] {
+		ti.EchoMode = textinput.EchoPassword
+		ti.EchoCharacter = '•'
+	}
 	return formField{name: name, input: ti}
 }
 

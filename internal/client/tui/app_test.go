@@ -446,6 +446,92 @@ func TestEditCarriesVersion(t *testing.T) {
 	require.Equal(t, "new", login.Password)
 }
 
+func TestSaveFromDetailRefreshesDetail(t *testing.T) {
+	entries := newFakeEntries(sampleEntries(t)...)
+	m := load(t, newAppModel(entries), entries)
+
+	// Open the edit form from the detail screen.
+	m = send(m, "enter", "e").(appModel)
+	require.Equal(t, screenForm, m.topScreen())
+	require.Equal(t, []screen{screenDetail, screenForm}, m.stack)
+
+	// Change the label and save.
+	m = send(m, "backspace", "backspace", "backspace",
+		"backspace", "backspace", "backspace").(appModel)
+	m = send(m, "g", "i", "t", "h", "u", "b", "2").(appModel)
+	_, cmd := m.Update(key("ctrl+s"))
+	require.NotNil(t, cmd)
+
+	up, next := run(m, cmd)
+	m = up.(appModel)
+
+	// The form closed onto the detail screen with the server's
+	// copy: the new label and the bumped version, not the stale
+	// pre-edit entry.
+	require.Equal(t, screenDetail, m.topScreen())
+	require.Same(t, entries.edited[0], m.current)
+	require.Equal(t, "github2", m.current.Label)
+	require.Equal(t, int64(3), m.current.Version)
+	require.Contains(t, m.View(), "github2")
+	require.Contains(t, m.View(), "Version:  3")
+
+	// Re-editing submits the NEW version: no guaranteed conflict.
+	m = send(m, "e").(appModel)
+	require.Equal(t, screenForm, m.topScreen())
+	_, cmd = m.Update(key("ctrl+s"))
+	require.NotNil(t, cmd)
+	_, _ = run(m, cmd)
+	require.Equal(t, []int64{2, 3}, entries.editVersions,
+		"the second edit must carry the refreshed version")
+
+	// The refresh triggered by the save also updated the list.
+	up, _ = run(m, next)
+	m = up.(appModel)
+	require.Equal(t, "github2", m.all[0].Label)
+}
+
+func TestDeleteFromDetailLandsOnList(t *testing.T) {
+	entries := newFakeEntries(sampleEntries(t)...)
+	m := load(t, newAppModel(entries), entries)
+
+	m = send(m, "enter", "d").(appModel)
+	require.Equal(t, screenConfirm, m.topScreen())
+
+	_, cmd := m.Update(key("y"))
+	require.NotNil(t, cmd)
+	up, next := run(m, cmd)
+	m = up.(appModel)
+
+	require.Equal(t, screenList, m.topScreen(), "deleting from detail must land on the list")
+	require.Nil(t, m.current)
+	require.Contains(t, m.status, "deleted")
+
+	// The refresh drops the entry from the list.
+	up, _ = run(m, next)
+	m = up.(appModel)
+	require.Len(t, m.all, 1)
+	require.Equal(t, "e2", m.all[0].ID)
+}
+
+func TestFormMasksSecretInputs(t *testing.T) {
+	entries := newFakeEntries(sampleEntries(t)...)
+	m := load(t, newAppModel(entries), entries)
+
+	// Login form: the password input is masked.
+	m = send(m, "e").(appModel)
+	form := m.View()
+	require.Contains(t, form, "•••")
+	require.NotContains(t, form, "s3cret")
+	m = send(m, "esc").(appModel)
+
+	// Card form: the CVV input is masked, the number is not.
+	m = send(m, "down", "e").(appModel)
+	form = m.View()
+	require.Contains(t, form, "•••")
+	require.NotContains(t, form, "123")
+	require.Contains(t, form, "4111111111111111")
+}
+
 func TestSaveErrorStaysInForm(t *testing.T) {
 	entries := newFakeEntries(sampleEntries(t)...)
 	entries.editErr = gateway.ErrConflict

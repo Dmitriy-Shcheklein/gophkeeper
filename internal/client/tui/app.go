@@ -98,6 +98,7 @@ func newAppModel(entries entryClient) appModel {
 	fi := textinput.New()
 	fi.Placeholder = "filter by label..."
 	fi.Prompt = "/"
+	fi.PromptStyle = filterStyle
 	return appModel{
 		entries:     entries,
 		filterInput: fi,
@@ -259,7 +260,15 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.popScreen() // close the form
-		m.setStatus("saved %q (v%d)", msg.saved.Label, msg.saved.Version)
+		if msg.saved != nil {
+			// The detail screen (when open underneath) must show
+			// the server's copy, not the stale pre-edit entry:
+			// re-editing the stale version would always conflict.
+			m.current = msg.saved
+			m.setStatus("saved %q (v%d)", msg.saved.Label, msg.saved.Version)
+		} else {
+			m.setStatus("saved")
+		}
 		return m, loadEntriesCmd(m.entries)
 
 	case deletedMsg:
@@ -268,7 +277,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setError(msg.err)
 			return m, nil
 		}
-		m.popScreen() // close the confirmation
+		// Deletion always lands on the list, even when the
+		// confirmation was opened from the detail screen (which
+		// would otherwise show a deleted entry).
+		m.stack = nil
 		m.current = nil
 		m.setStatus("entry deleted")
 		return m, loadEntriesCmd(m.entries)

@@ -108,7 +108,7 @@ func (m appModel) viewList() string {
 	if m.filtering {
 		sb.WriteString(titleStyle.Render("Filter") + " " + m.filterInput.View() + "\n")
 	} else if m.filter != "" {
-		sb.WriteString(titleStyle.Render(fmt.Sprintf("Entries — filter: %q", m.filter)) + "\n")
+		sb.WriteString(titleStyle.Render("Entries — filter: ") + filterStyle.Render(fmt.Sprintf("%q", m.filter)) + "\n")
 	} else {
 		header := "Entries"
 		if m.loading {
