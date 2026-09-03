@@ -467,6 +467,91 @@ func (*DeleteEntryResponse) Descriptor() ([]byte, []int) {
 	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{9}
 }
 
+// SyncRequest asks for the current state of all entries of the
+// authenticated user.
+type SyncRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncRequest) Reset() {
+	*x = SyncRequest{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncRequest) ProtoMessage() {}
+
+func (x *SyncRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncRequest.ProtoReflect.Descriptor instead.
+func (*SyncRequest) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{10}
+}
+
+// SyncResponse carries the full current list of the user's entries,
+// so multiple authorized clients of the same owner stay in sync.
+type SyncResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// entries is the complete current set of the user's entries.
+	Entries       []*Entry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncResponse) Reset() {
+	*x = SyncResponse{}
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncResponse) ProtoMessage() {}
+
+func (x *SyncResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gophkeeper_v1_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncResponse.ProtoReflect.Descriptor instead.
+func (*SyncResponse) Descriptor() ([]byte, []int) {
+	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SyncResponse) GetEntries() []*Entry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
 var File_gophkeeper_v1_service_proto protoreflect.FileDescriptor
 
 const file_gophkeeper_v1_service_proto_rawDesc = "" +
@@ -489,13 +574,17 @@ const file_gophkeeper_v1_service_proto_rawDesc = "" +
 	"\x05entry\x18\x01 \x01(\v2\x14.gophkeeper.v1.EntryR\x05entry\"$\n" +
 	"\x12DeleteEntryRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
-	"\x13DeleteEntryResponse2\x98\x03\n" +
+	"\x13DeleteEntryResponse\"\r\n" +
+	"\vSyncRequest\">\n" +
+	"\fSyncResponse\x12.\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.gophkeeper.v1.EntryR\aentries2\xd9\x03\n" +
 	"\fEntryService\x12O\n" +
 	"\x06Create\x12!.gophkeeper.v1.CreateEntryRequest\x1a\".gophkeeper.v1.CreateEntryResponse\x12F\n" +
 	"\x03Get\x12\x1e.gophkeeper.v1.GetEntryRequest\x1a\x1f.gophkeeper.v1.GetEntryResponse\x12M\n" +
 	"\x04List\x12!.gophkeeper.v1.ListEntriesRequest\x1a\".gophkeeper.v1.ListEntriesResponse\x12O\n" +
 	"\x06Update\x12!.gophkeeper.v1.UpdateEntryRequest\x1a\".gophkeeper.v1.UpdateEntryResponse\x12O\n" +
-	"\x06Delete\x12!.gophkeeper.v1.DeleteEntryRequest\x1a\".gophkeeper.v1.DeleteEntryResponseBOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
+	"\x06Delete\x12!.gophkeeper.v1.DeleteEntryRequest\x1a\".gophkeeper.v1.DeleteEntryResponse\x12?\n" +
+	"\x04Sync\x12\x1a.gophkeeper.v1.SyncRequest\x1a\x1b.gophkeeper.v1.SyncResponseBOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
 
 var (
 	file_gophkeeper_v1_service_proto_rawDescOnce sync.Once
@@ -509,7 +598,7 @@ func file_gophkeeper_v1_service_proto_rawDescGZIP() []byte {
 	return file_gophkeeper_v1_service_proto_rawDescData
 }
 
-var file_gophkeeper_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_gophkeeper_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_gophkeeper_v1_service_proto_goTypes = []any{
 	(*CreateEntryRequest)(nil),  // 0: gophkeeper.v1.CreateEntryRequest
 	(*CreateEntryResponse)(nil), // 1: gophkeeper.v1.CreateEntryResponse
@@ -521,30 +610,35 @@ var file_gophkeeper_v1_service_proto_goTypes = []any{
 	(*UpdateEntryResponse)(nil), // 7: gophkeeper.v1.UpdateEntryResponse
 	(*DeleteEntryRequest)(nil),  // 8: gophkeeper.v1.DeleteEntryRequest
 	(*DeleteEntryResponse)(nil), // 9: gophkeeper.v1.DeleteEntryResponse
-	(*Entry)(nil),               // 10: gophkeeper.v1.Entry
+	(*SyncRequest)(nil),         // 10: gophkeeper.v1.SyncRequest
+	(*SyncResponse)(nil),        // 11: gophkeeper.v1.SyncResponse
+	(*Entry)(nil),               // 12: gophkeeper.v1.Entry
 }
 var file_gophkeeper_v1_service_proto_depIdxs = []int32{
-	10, // 0: gophkeeper.v1.CreateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
-	10, // 1: gophkeeper.v1.CreateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
-	10, // 2: gophkeeper.v1.GetEntryResponse.entry:type_name -> gophkeeper.v1.Entry
-	10, // 3: gophkeeper.v1.ListEntriesResponse.entries:type_name -> gophkeeper.v1.Entry
-	10, // 4: gophkeeper.v1.UpdateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
-	10, // 5: gophkeeper.v1.UpdateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
-	0,  // 6: gophkeeper.v1.EntryService.Create:input_type -> gophkeeper.v1.CreateEntryRequest
-	2,  // 7: gophkeeper.v1.EntryService.Get:input_type -> gophkeeper.v1.GetEntryRequest
-	4,  // 8: gophkeeper.v1.EntryService.List:input_type -> gophkeeper.v1.ListEntriesRequest
-	6,  // 9: gophkeeper.v1.EntryService.Update:input_type -> gophkeeper.v1.UpdateEntryRequest
-	8,  // 10: gophkeeper.v1.EntryService.Delete:input_type -> gophkeeper.v1.DeleteEntryRequest
-	1,  // 11: gophkeeper.v1.EntryService.Create:output_type -> gophkeeper.v1.CreateEntryResponse
-	3,  // 12: gophkeeper.v1.EntryService.Get:output_type -> gophkeeper.v1.GetEntryResponse
-	5,  // 13: gophkeeper.v1.EntryService.List:output_type -> gophkeeper.v1.ListEntriesResponse
-	7,  // 14: gophkeeper.v1.EntryService.Update:output_type -> gophkeeper.v1.UpdateEntryResponse
-	9,  // 15: gophkeeper.v1.EntryService.Delete:output_type -> gophkeeper.v1.DeleteEntryResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	12, // 0: gophkeeper.v1.CreateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
+	12, // 1: gophkeeper.v1.CreateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	12, // 2: gophkeeper.v1.GetEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	12, // 3: gophkeeper.v1.ListEntriesResponse.entries:type_name -> gophkeeper.v1.Entry
+	12, // 4: gophkeeper.v1.UpdateEntryRequest.entry:type_name -> gophkeeper.v1.Entry
+	12, // 5: gophkeeper.v1.UpdateEntryResponse.entry:type_name -> gophkeeper.v1.Entry
+	12, // 6: gophkeeper.v1.SyncResponse.entries:type_name -> gophkeeper.v1.Entry
+	0,  // 7: gophkeeper.v1.EntryService.Create:input_type -> gophkeeper.v1.CreateEntryRequest
+	2,  // 8: gophkeeper.v1.EntryService.Get:input_type -> gophkeeper.v1.GetEntryRequest
+	4,  // 9: gophkeeper.v1.EntryService.List:input_type -> gophkeeper.v1.ListEntriesRequest
+	6,  // 10: gophkeeper.v1.EntryService.Update:input_type -> gophkeeper.v1.UpdateEntryRequest
+	8,  // 11: gophkeeper.v1.EntryService.Delete:input_type -> gophkeeper.v1.DeleteEntryRequest
+	10, // 12: gophkeeper.v1.EntryService.Sync:input_type -> gophkeeper.v1.SyncRequest
+	1,  // 13: gophkeeper.v1.EntryService.Create:output_type -> gophkeeper.v1.CreateEntryResponse
+	3,  // 14: gophkeeper.v1.EntryService.Get:output_type -> gophkeeper.v1.GetEntryResponse
+	5,  // 15: gophkeeper.v1.EntryService.List:output_type -> gophkeeper.v1.ListEntriesResponse
+	7,  // 16: gophkeeper.v1.EntryService.Update:output_type -> gophkeeper.v1.UpdateEntryResponse
+	9,  // 17: gophkeeper.v1.EntryService.Delete:output_type -> gophkeeper.v1.DeleteEntryResponse
+	11, // 18: gophkeeper.v1.EntryService.Sync:output_type -> gophkeeper.v1.SyncResponse
+	13, // [13:19] is the sub-list for method output_type
+	7,  // [7:13] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_gophkeeper_v1_service_proto_init() }
@@ -559,7 +653,7 @@ func file_gophkeeper_v1_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gophkeeper_v1_service_proto_rawDesc), len(file_gophkeeper_v1_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

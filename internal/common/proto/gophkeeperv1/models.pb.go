@@ -93,7 +93,7 @@ type User struct {
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// login is the unique login name used for authentication.
 	Login string `protobuf:"bytes,2,opt,name=login,proto3" json:"login,omitempty"`
-	// created_at is the account creation timestamp (RFC 3339 / Unix seconds).
+	// created_at is the account creation timestamp, Unix seconds (UTC).
 	CreatedAt     int64 `protobuf:"varint,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -172,9 +172,9 @@ type Entry struct {
 	// version is incremented on every update and used for optimistic locking:
 	// update requests must carry the version they are based on.
 	Version int64 `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
-	// created_at is the entry creation timestamp (Unix seconds).
+	// created_at is the entry creation timestamp, Unix seconds (UTC).
 	CreatedAt int64 `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// updated_at is the last modification timestamp (Unix seconds).
+	// updated_at is the last modification timestamp, Unix seconds (UTC).
 	UpdatedAt     int64 `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

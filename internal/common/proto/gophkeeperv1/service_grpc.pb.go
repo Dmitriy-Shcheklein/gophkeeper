@@ -26,6 +26,7 @@ const (
 	EntryService_List_FullMethodName   = "/gophkeeper.v1.EntryService/List"
 	EntryService_Update_FullMethodName = "/gophkeeper.v1.EntryService/Update"
 	EntryService_Delete_FullMethodName = "/gophkeeper.v1.EntryService/Delete"
+	EntryService_Sync_FullMethodName   = "/gophkeeper.v1.EntryService/Sync"
 )
 
 // EntryServiceClient is the client API for EntryService service.
@@ -44,6 +45,10 @@ type EntryServiceClient interface {
 	Update(ctx context.Context, in *UpdateEntryRequest, opts ...grpc.CallOption) (*UpdateEntryResponse, error)
 	// Delete removes an entry by id.
 	Delete(ctx context.Context, in *DeleteEntryRequest, opts ...grpc.CallOption) (*DeleteEntryResponse, error)
+	// Sync returns the full current list of the authenticated user's entries,
+	// allowing several authorized clients of the same owner to converge
+	// on the same server state.
+	Sync(ctx context.Context, in *SyncRequest, opts ...grpc.CallOption) (*SyncResponse, error)
 }
 
 type entryServiceClient struct {
@@ -104,6 +109,16 @@ func (c *entryServiceClient) Delete(ctx context.Context, in *DeleteEntryRequest,
 	return out, nil
 }
 
+func (c *entryServiceClient) Sync(ctx context.Context, in *SyncRequest, opts ...grpc.CallOption) (*SyncResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SyncResponse)
+	err := c.cc.Invoke(ctx, EntryService_Sync_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EntryServiceServer is the server API for EntryService service.
 // All implementations must embed UnimplementedEntryServiceServer
 // for forward compatibility.
@@ -120,6 +135,10 @@ type EntryServiceServer interface {
 	Update(context.Context, *UpdateEntryRequest) (*UpdateEntryResponse, error)
 	// Delete removes an entry by id.
 	Delete(context.Context, *DeleteEntryRequest) (*DeleteEntryResponse, error)
+	// Sync returns the full current list of the authenticated user's entries,
+	// allowing several authorized clients of the same owner to converge
+	// on the same server state.
+	Sync(context.Context, *SyncRequest) (*SyncResponse, error)
 	mustEmbedUnimplementedEntryServiceServer()
 }
 
@@ -144,6 +163,9 @@ func (UnimplementedEntryServiceServer) Update(context.Context, *UpdateEntryReque
 }
 func (UnimplementedEntryServiceServer) Delete(context.Context, *DeleteEntryRequest) (*DeleteEntryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Delete not implemented")
+}
+func (UnimplementedEntryServiceServer) Sync(context.Context, *SyncRequest) (*SyncResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Sync not implemented")
 }
 func (UnimplementedEntryServiceServer) mustEmbedUnimplementedEntryServiceServer() {}
 func (UnimplementedEntryServiceServer) testEmbeddedByValue()                      {}
@@ -256,6 +278,24 @@ func _EntryService_Delete_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EntryService_Sync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EntryServiceServer).Sync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EntryService_Sync_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EntryServiceServer).Sync(ctx, req.(*SyncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EntryService_ServiceDesc is the grpc.ServiceDesc for EntryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -282,6 +322,10 @@ var EntryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _EntryService_Delete_Handler,
+		},
+		{
+			MethodName: "Sync",
+			Handler:    _EntryService_Sync_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

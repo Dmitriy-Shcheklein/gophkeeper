@@ -27,7 +27,7 @@ message User {
   string id = 1;
   // login is the unique login name used for authentication.
   string login = 2;
-  // created_at is the account creation timestamp (RFC 3339 / Unix seconds).
+  // created_at is the account creation timestamp, Unix seconds (UTC).
   int64 created_at = 3;
 }
 
@@ -52,8 +52,8 @@ message Entry {
   // version is incremented on every update and used for optimistic locking:
   // update requests must carry the version they are based on.
   int64 version = 6;
-  // created_at is the entry creation timestamp (Unix seconds).
+  // created_at is the entry creation timestamp, Unix seconds (UTC).
   int64 created_at = 7;
-  // updated_at is the last modification timestamp (Unix seconds).
+  // updated_at is the last modification timestamp, Unix seconds (UTC).
   int64 updated_at = 8;
 }

@@ -67,6 +67,19 @@ message DeleteEntryResponse {
   // Empty for now; reserved for future use.
 }
 
+// SyncRequest asks for the current state of all entries of the
+// authenticated user.
+message SyncRequest {
+  // Empty; the user is identified by the JWT in request metadata.
+}
+
+// SyncResponse carries the full current list of the user's entries,
+// so multiple authorized clients of the same owner stay in sync.
+message SyncResponse {
+  // entries is the complete current set of the user's entries.
+  repeated Entry entries = 1;
+}
+
 // EntryService manages the authenticated user's private data entries.
 service EntryService {
   // Create stores a new entry for the authenticated user.
@@ -79,4 +92,8 @@ service EntryService {
   rpc Update(UpdateEntryRequest) returns (UpdateEntryResponse);
   // Delete removes an entry by id.
   rpc Delete(DeleteEntryRequest) returns (DeleteEntryResponse);
+  // Sync returns the full current list of the authenticated user's entries,
+  // allowing several authorized clients of the same owner to converge
+  // on the same server state.
+  rpc Sync(SyncRequest) returns (SyncResponse);
 }
