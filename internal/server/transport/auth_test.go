@@ -18,7 +18,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1"
-	"github.com/dmitriy/gophkeeper/internal/server/auth"
 	"github.com/dmitriy/gophkeeper/internal/server/model"
 	"github.com/dmitriy/gophkeeper/internal/server/service"
 )
@@ -198,10 +197,4 @@ func TestAuthHandler_Login_ErrorMapping(t *testing.T) {
 			assert.Equal(t, tt.wantMsg, status.Convert(err).Message())
 		})
 	}
-}
-
-// claimsContext returns a context carrying claims of a user with the
-// given id, as the auth interceptor would.
-func claimsContext(userID string) context.Context {
-	return auth.ContextWithClaims(context.Background(), &auth.Claims{UserID: userID, Login: "alice"})
 }

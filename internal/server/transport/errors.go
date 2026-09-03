@@ -13,7 +13,9 @@ import (
 // invalidArgumentErrors lists the validation sentinels of the service
 // layer, mapped to codes.InvalidArgument. The sentinel messages name
 // the offending field, which makes them safe and useful to return to
-// clients verbatim.
+// clients verbatim. Keep in sync with validation sentinels in
+// service/auth.go and service/entry.go; unmapped sentinels fall
+// through to Internal.
 var invalidArgumentErrors = []error{
 	service.ErrEmptyLogin,
 	service.ErrLoginTooLong,
@@ -54,6 +56,10 @@ func toStatusError(err error) error {
 	case errors.Is(err, service.ErrInvalidCredentials):
 		return status.Error(codes.Unauthenticated, service.ErrInvalidCredentials.Error())
 	case errors.Is(err, model.ErrUnauthorized):
+		// Bare ErrUnauthorized currently never reaches clients
+		// (Login wraps it with ErrInvalidCredentials, handled above);
+		// this branch guards future authorization paths such as
+		// cross-owner access checks.
 		return status.Error(codes.Unauthenticated, "authentication required")
 	case errors.Is(err, model.ErrNotFound):
 		return status.Error(codes.NotFound, "entity not found")
