@@ -290,6 +290,7 @@ func (s *EntryService) Delete(ctx context.Context, userID, entryID string) error
 
 - [ ] Валидация: тип записи, обязательные поля, принадлежность записи пользователю
 - [ ] Конфликт версий при Update — возвращает `ErrConflict`, если версия не совпадает (optimistic locking)
+- [ ] При Update обязательно обновлять updated_at (= NOW()) на стороне SQL или приложения
 - [ ] Тесты с моком `EntryRepository`
 
 **Коммит:** `feat: implement entry service with CRUD and conflict resolution`
@@ -314,6 +315,7 @@ func (s *EntryService) Delete(ctx context.Context, userID, entryID string) error
 
 - [ ] `transport/entry.go` — реализация `pb.EntryServiceServer`:
   - Create/Get/List/Update/Delete: извлечение user_id из context (после middleware), вызов service, маппинг в protobuf
+  - Sync: возвращает полный актуальный список записей пользователя (у клиента нет кэша, поэтому Sync = полная выгрузка состояния)
   - Обработка ошибок → gRPC status codes (NotFound, AlreadyExists, PermissionDenied, Internal)
 
 - [ ] Конвертеры: `model.Entry` ↔ `pb.Entry`, `model.EntryType` ↔ `pb.EntryType`
@@ -388,6 +390,7 @@ type EntryGateway interface {
     List(ctx context.Context) ([]*Entry, error)
     Update(ctx context.Context, entry *Entry) (*Entry, error)
     Delete(ctx context.Context, id string) error
+    Sync(ctx context.Context) ([]*Entry, error) // полная выгрузка состояния сервера
 }
 ```
 
