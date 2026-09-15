@@ -111,12 +111,14 @@ func Load(args []string) (*Config, error) {
 	}
 
 	var (
-		address     = fs.String("address", envString(EnvGRPCAddress, DefaultAddress), "gRPC listen address ($"+EnvGRPCAddress+")")
-		dsn         = fs.String("dsn", os.Getenv(EnvDSN), "PostgreSQL connection URL, required ($"+EnvDSN+")")
-		secret      = fs.String("jwt-secret", os.Getenv(EnvJWTSecret), "JWT signing secret, required ($"+EnvJWTSecret+")")
-		ttl         = fs.String("jwt-ttl", envString(EnvJWTTTL, DefaultJWTTTL.String()), "access token lifetime, Go duration ($"+EnvJWTTTL+")")
-		logLevel    = fs.String("log-level", envLevelName(DefaultLogLevel), "log level: debug, info, warn or error ($"+EnvLogLevel+")")
-		maxDataSize = fs.Int64("max-data-size", envInt64(EnvMaxDataSize, DefaultMaxDataSize), "maximum entry payload size in bytes ($"+EnvMaxDataSize+")")
+		address      = fs.String("address", envString(EnvGRPCAddress, DefaultAddress), "gRPC listen address ($"+EnvGRPCAddress+")")
+		dsnVal, _    = os.LookupEnv(EnvDSN)
+		secretVal, _ = os.LookupEnv(EnvJWTSecret)
+		dsn          = fs.String("dsn", dsnVal, "PostgreSQL connection URL, required ($"+EnvDSN+")")
+		secret       = fs.String("jwt-secret", secretVal, "JWT signing secret, required ($"+EnvJWTSecret+")")
+		ttl          = fs.String("jwt-ttl", envString(EnvJWTTTL, DefaultJWTTTL.String()), "access token lifetime, Go duration ($"+EnvJWTTTL+")")
+		logLevel     = fs.String("log-level", envLevelName(DefaultLogLevel), "log level: debug, info, warn or error ($"+EnvLogLevel+")")
+		maxDataSize  = fs.Int64("max-data-size", envInt64(EnvMaxDataSize, DefaultMaxDataSize), "maximum entry payload size in bytes ($"+EnvMaxDataSize+")")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -177,7 +179,7 @@ func valueSource(fs *flag.FlagSet, flagName, envName string) string {
 	if fromFlag {
 		return "--" + flagName
 	}
-	if os.Getenv(envName) != "" {
+	if _, ok := os.LookupEnv(envName); ok {
 		return "$" + envName
 	}
 	return "--" + flagName
@@ -186,16 +188,13 @@ func valueSource(fs *flag.FlagSet, flagName, envName string) string {
 // envString returns the value of the environment variable name, or
 // fallback when it is unset or empty.
 func envString(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
+	return envGet(name, fallback)
 }
 
 // envInt64 returns the integer value of the environment variable name,
 // or fallback when it is unset, empty or unparsable.
 func envInt64(name string, fallback int64) int64 {
-	if value := os.Getenv(name); value != "" {
+	if value, ok := os.LookupEnv(name); ok && value != "" {
 		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return n
 		}
@@ -206,10 +205,21 @@ func envInt64(name string, fallback int64) int64 {
 // envLevelName returns the canonical slog name of the level given in
 // the LOG_LEVEL environment variable, or fallback when it is unset.
 func envLevelName(fallback slog.Level) string {
-	if value := os.Getenv(EnvLogLevel); value != "" {
+	if value, ok := os.LookupEnv(EnvLogLevel); ok && value != "" {
 		return value
 	}
 	return fallback.String()
+}
+
+// envGet returns the value of the named environment variable when it
+// is set and non-empty, or fallback otherwise. Use os.LookupEnv
+// directly when the caller needs to distinguish between an unset
+// variable and an explicitly empty one.
+func envGet(name, fallback string) string {
+	if value, ok := os.LookupEnv(name); ok && value != "" {
+		return value
+	}
+	return fallback
 }
 
 // parseLevel converts a level name (case-insensitive: debug, info,

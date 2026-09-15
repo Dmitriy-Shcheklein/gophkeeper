@@ -956,6 +956,12 @@ func TestAuthEscQuits(t *testing.T) {
 }
 
 func TestSaveToFileScreenFlow(t *testing.T) {
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	tmpDir := t.TempDir()
+	require.NoError(t, os.Chdir(tmpDir))
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
 	entries := newFakeEntries(&model.Entry{
 		ID: "e-bin", Type: model.EntryTypeBinary, Label: "movie.bin",
 		Data: []byte("payload"), DataSize: 7, Version: 1,
