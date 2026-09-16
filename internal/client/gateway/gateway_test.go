@@ -2,16 +2,25 @@ package gateway
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
+	"math/big"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
@@ -43,21 +52,62 @@ func mustStore(t *testing.T) *token.Store {
 	return store
 }
 
-// newBufnetGateway starts an in-process gRPC server on a bufconn
-// listener, registers services with reg, and returns a Gateway wired
-// to it with a fresh token store. Everything is cleaned up on test
-// completion.
+// testTLSConfig generates an in-memory self-signed certificate and
+// returns a client-side tls.Config trusting it (the server runs TLS
+// with the matching key).
+func testTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	tmpl := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "bufconn.local"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"bufconn.local"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	cert := tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+
+	serverCfg := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+
+	pool := x509.NewCertPool()
+	parsed, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatalf("parse cert: %v", err)
+	}
+	pool.AddCert(parsed)
+	clientCfg := &tls.Config{RootCAs: pool, ServerName: "bufconn.local", MinVersion: tls.VersionTLS12}
+
+	return serverCfg, clientCfg
+}
+
+// newBufnetGateway starts an in-process gRPC server over TLS on a
+// bufconn listener, registers services with reg, and returns a
+// Gateway wired to it with a fresh token store. Everything is cleaned
+// up on test completion.
 func newBufnetGateway(t *testing.T, reg func(s *grpc.Server)) *Gateway {
 	t.Helper()
 
+	serverCfg, clientCfg := testTLSConfig(t)
+
 	lis := bufconn.Listen(1024 * 1024)
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(serverCfg)))
 	reg(srv)
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 
 	g := &Gateway{tokenStore: mustStore(t)}
-	opts := append(g.dialOptions(), grpc.WithContextDialer(
+	opts := append(g.dialOptions(clientCfg), grpc.WithContextDialer(
 		func(ctx context.Context, _ string) (net.Conn, error) {
 			return lis.DialContext(ctx)
 		},
@@ -117,13 +167,13 @@ func (f *fakeAuthService) sawAuthz() string {
 }
 
 func TestNewRejectsNilTokenStore(t *testing.T) {
-	if _, err := New("localhost:1", nil); err == nil {
+	if _, err := New("localhost:1", nil, nil); err == nil {
 		t.Fatal("New with nil token store returned nil error, want error")
 	}
 }
 
 func TestGatewayTokenAccessors(t *testing.T) {
-	g, err := New("localhost:1", mustStore(t))
+	g, err := New("localhost:1", mustStore(t), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -146,7 +196,7 @@ func TestGatewayTokenAccessors(t *testing.T) {
 }
 
 func TestGatewayClose(t *testing.T) {
-	g, err := New("localhost:1", mustStore(t))
+	g, err := New("localhost:1", mustStore(t), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -156,7 +206,7 @@ func TestGatewayClose(t *testing.T) {
 }
 
 func TestGatewayTokenStoreAccessor(t *testing.T) {
-	g, err := New("localhost:1", mustStore(t))
+	g, err := New("localhost:1", mustStore(t), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

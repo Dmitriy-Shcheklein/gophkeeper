@@ -38,6 +38,16 @@ const (
 	EnvLogLevel = "LOG_LEVEL"
 	// EnvMaxDataSize holds the maximum entry payload size in bytes.
 	EnvMaxDataSize = "MAX_DATA_SIZE"
+	// EnvTLSCertFile holds the path to the TLS certificate (PEM).
+	EnvTLSCertFile = "TLS_CERT"
+	// EnvTLSKeyFile holds the path to the TLS private key (PEM).
+	EnvTLSKeyFile = "TLS_KEY"
+	// EnvAutocertDomain holds the public domain for automatic ACME
+	// certificate management (Let's Encrypt).
+	EnvAutocertDomain = "AUTOCERT_DOMAIN"
+	// EnvAutocertCacheDir holds the directory for ACME account and
+	// certificate cache.
+	EnvAutocertCacheDir = "AUTOCERT_CACHE_DIR"
 )
 
 // Default flag values.
@@ -57,6 +67,10 @@ const (
 	// (1 GiB) used when neither the MAX_DATA_SIZE environment variable
 	// nor the --max-data-size flag is set.
 	DefaultMaxDataSize = int64(1 << 30)
+	// DefaultAutocertCacheDir is the certificate cache directory used
+	// when neither the AUTOCERT_CACHE_DIR environment variable nor the
+	// --autocert-cache-dir flag is set.
+	DefaultAutocertCacheDir = "./certs-cache"
 )
 
 // Config is the fully resolved server configuration. Use Load to
@@ -80,6 +94,24 @@ type Config struct {
 	// MaxDataSize is the maximum accepted entry payload size in bytes,
 	// enforced on both the unary and the streaming upload paths.
 	MaxDataSize int64
+	// TLSCertFile is the path to the PEM-encoded TLS certificate chain;
+	// TLSKeyFile is the matching PEM-encoded private key. When both are
+	// set the gRPC server serves TLS with this pair (the self-signed
+	// scenario, e.g. certificates produced by `gophkeeper-server
+	// gen-cert`). Exactly one TLS mode must be configured: this pair or
+	// AutocertDomain — the server refuses to start in plaintext.
+	TLSCertFile string
+	// TLSKeyFile is the path to the PEM-encoded TLS private key; see
+	// TLSCertFile.
+	TLSKeyFile string
+	// AutocertDomain is the public domain name for automatic
+	// certificate issuance via ACME (Let's Encrypt) using
+	// autocert.Manager. Mutually exclusive with TLSCertFile/TLSKeyFile.
+	AutocertDomain string
+	// AutocertCacheDir is the directory where autocert.Manager stores
+	// the ACME account and issued certificates. Only used in the
+	// autocert mode.
+	AutocertCacheDir string
 }
 
 // ErrHelp is returned by Load when the -h or --help flag is requested.
@@ -119,6 +151,10 @@ func Load(args []string) (*Config, error) {
 		ttl          = fs.String("jwt-ttl", envString(EnvJWTTTL, DefaultJWTTTL.String()), "access token lifetime, Go duration ($"+EnvJWTTTL+")")
 		logLevel     = fs.String("log-level", envLevelName(DefaultLogLevel), "log level: debug, info, warn or error ($"+EnvLogLevel+")")
 		maxDataSize  = fs.Int64("max-data-size", envInt64(EnvMaxDataSize, DefaultMaxDataSize), "maximum entry payload size in bytes ($"+EnvMaxDataSize+")")
+		tlsCert      = fs.String("tls-cert", envString(EnvTLSCertFile, ""), "PEM TLS certificate file ($"+EnvTLSCertFile+")")
+		tlsKey       = fs.String("tls-key", envString(EnvTLSKeyFile, ""), "PEM TLS private key file ($"+EnvTLSKeyFile+")")
+		acmeDomain   = fs.String("autocert-domain", envString(EnvAutocertDomain, ""), "public domain for ACME (Let's Encrypt) certificates ($"+EnvAutocertDomain+")")
+		acmeCacheDir = fs.String("autocert-cache-dir", envString(EnvAutocertCacheDir, DefaultAutocertCacheDir), "ACME certificate cache directory ($"+EnvAutocertCacheDir+")")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -154,14 +190,40 @@ func Load(args []string) (*Config, error) {
 		return nil, fmt.Errorf("config: --max-data-size (or $%s) must be positive", EnvMaxDataSize)
 	}
 
+	switch {
+	case *tlsCert != "" && *tlsKey == "":
+		return nil, fmt.Errorf("config: --tls-cert (or $%s) is set but --tls-key (or $%s) is missing", EnvTLSCertFile, EnvTLSKeyFile)
+	case *tlsCert == "" && *tlsKey != "":
+		return nil, fmt.Errorf("config: --tls-key (or $%s) is set but --tls-cert (or $%s) is missing", EnvTLSKeyFile, EnvTLSCertFile)
+	case *tlsCert != "" && *acmeDomain != "":
+		return nil, fmt.Errorf("config: --tls-cert/--tls-key and --autocert-domain are mutually exclusive TLS modes")
+	case *acmeDomain != "" && *acmeCacheDir == "":
+		return nil, fmt.Errorf("config: --autocert-cache-dir (or $%s) must not be empty", EnvAutocertCacheDir)
+	case *tlsCert == "" && *acmeDomain == "":
+		return nil, fmt.Errorf("config: TLS is required: set --tls-cert and --tls-key (e.g. via 'gophkeeper-server gen-cert') or --autocert-domain (or $%s/$%s)", EnvTLSCertFile, EnvAutocertDomain)
+	}
+
 	return &Config{
-		Address:     *address,
-		DSN:         *dsn,
-		JWTSecret:   *secret,
-		JWTTTL:      tokenTTL,
-		LogLevel:    level,
-		MaxDataSize: *maxDataSize,
+		Address:          *address,
+		DSN:              *dsn,
+		JWTSecret:        *secret,
+		JWTTTL:           tokenTTL,
+		LogLevel:         level,
+		MaxDataSize:      *maxDataSize,
+		TLSCertFile:      *tlsCert,
+		TLSKeyFile:       *tlsKey,
+		AutocertDomain:   *acmeDomain,
+		AutocertCacheDir: acmeCacheDirValue(*acmeDomain, *acmeCacheDir),
 	}, nil
+}
+
+// acmeCacheDirValue returns the cache dir only in autocert mode so the
+// resolved Config does not carry a default cache dir in cert-pair mode.
+func acmeCacheDirValue(domain, cacheDir string) string {
+	if domain == "" {
+		return ""
+	}
+	return cacheDir
 }
 
 // valueSource describes where the value of the named setting came

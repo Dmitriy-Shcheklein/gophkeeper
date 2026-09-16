@@ -30,6 +30,8 @@ func NewRootCommand(app *App) *cobra.Command {
 		"token file path ($GOPHKEEPER_TOKEN_PATH, default ~/.gophkeeper/token)")
 	root.PersistentFlags().StringVar(&app.cacheFlag, "cache-path", "",
 		"offline cache file path ($GOPHKEEPER_CACHE_PATH, default ~/.gophkeeper/cache.json)")
+	root.PersistentFlags().StringVar(&app.caFlag, "tls-ca", "",
+		"PEM CA certificate to verify the server TLS certificate ($GOPHKEEPER_CA_PATH); omit to use system roots")
 
 	root.AddCommand(
 		newRegisterCommand(app),

@@ -105,6 +105,8 @@ type App struct {
 	serverFlag string
 	tokenFlag  string
 	cacheFlag  string
+	// caFlag receives the value of the persistent --tls-ca flag.
+	caFlag string
 
 	// auth and entries are the services used by the commands: the
 	// injected fakes in tests, or the lazily built real services.
@@ -151,7 +153,11 @@ func connectReal(cfg *config.Config) (authClient, entryClient, func(), error) {
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open offline cache: %w", err)
 	}
-	gw, err := gateway.New(cfg.Server, store)
+	tlsCfg, err := gateway.LoadTLSConfigWithCA(cfg.CAPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	gw, err := gateway.New(cfg.Server, store, tlsCfg)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -170,7 +176,7 @@ func (a *App) initServices() error {
 	if a.connect == nil {
 		return errors.New("cli: no services configured")
 	}
-	cfg, err := config.Resolve(a.serverFlag, a.tokenFlag, a.cacheFlag)
+	cfg, err := config.Resolve(a.serverFlag, a.tokenFlag, a.cacheFlag, a.caFlag)
 	if err != nil {
 		return err
 	}

@@ -4,22 +4,23 @@
 // implementations used by the service layer (and, through it, the CLI
 // and TUI).
 //
-// Security note: the transport is deliberately insecure (no TLS) for
-// now — the technical specification leaves transport security at the
-// implementer's discretion, and the chosen deployment model is
-// transport isolation (the client talks to the server over a trusted
-// network segment). TLS can be enabled later by replacing
-// insecure.NewCredentials with proper transport credentials; nothing
-// else in this package depends on that choice.
+// Security note: the transport is always TLS. The caller supplies the
+// *tls.Config: pass a config with a pinned CA certificate (--tls-ca,
+// self-signed server scenario) or nil to verify the server against
+// the system root certificate store (public CA / autocert scenario).
+// Plaintext connections are not supported.
 package gateway
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 	"sync"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dmitriy/gophkeeper/internal/client/token"
@@ -56,21 +57,27 @@ type Gateway struct {
 	token string
 }
 
-// New creates a Gateway dialing target (lazily) with insecure
-// transport credentials — see the package comment for the security
-// rationale.
+// New creates a Gateway dialing target (lazily) over TLS. The
+// transport is always encrypted: pass tlsCfg with a pinned CA
+// certificate for the self-signed server scenario, or nil to verify
+// the server against the system root certificate store (public CA /
+// autocert scenario). Plaintext connections are not supported.
 //
 // tokenStore must not be nil: Register and Login persist the obtained
 // token through it so the next CLI invocation (a separate process)
 // can pick the token up from disk. The constructor does NOT load a
 // persisted token automatically — the service layer decides whether
 // and when to do it (see SetToken).
-func New(target string, tokenStore *token.Store) (*Gateway, error) {
+func New(target string, tokenStore *token.Store, tlsCfg *tls.Config) (*Gateway, error) {
+	resolved, err := resolveTLSConfig(tlsCfg)
+	if err != nil {
+		return nil, err
+	}
 	if tokenStore == nil {
 		return nil, fmt.Errorf("gateway: token store must not be nil")
 	}
 	g := &Gateway{tokenStore: tokenStore}
-	conn, err := grpc.NewClient(target, g.dialOptions()...)
+	conn, err := grpc.NewClient(target, g.dialOptions(resolved)...)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: create client: %w", err)
 	}
@@ -78,13 +85,49 @@ func New(target string, tokenStore *token.Store) (*Gateway, error) {
 	return g, nil
 }
 
+// resolveTLSConfig fills in the defaults for a TLS config: nil means
+// system root certificate store; a provided config keeps its RootCAs
+// (pinned CA) and gets a safe minimum TLS version.
+func resolveTLSConfig(tlsCfg *tls.Config) (*tls.Config, error) {
+	if tlsCfg == nil {
+		return &tls.Config{MinVersion: tls.VersionTLS12}, nil
+	}
+	resolved := tlsCfg.Clone()
+	if resolved.MinVersion == 0 {
+		resolved.MinVersion = tls.VersionTLS12
+	}
+	return resolved, nil
+}
+
+// LoadTLSConfigWithCA builds a TLS config that verifies the server
+// certificate against the CA certificate in caFile (self-signed
+// scenario). The file must contain a PEM certificate; it is added to
+// the trust pool alongside the system roots. caFile may be empty to
+// skip pinning and use only the system roots.
+func LoadTLSConfigWithCA(caFile string) (*tls.Config, error) {
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if caFile == "" {
+		return tlsCfg, nil
+	}
+	pemBytes, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: read TLS CA file %s: %w", caFile, err)
+	}
+	pool := x509.NewCertPool()
+	if ok := pool.AppendCertsFromPEM(pemBytes); !ok {
+		return nil, fmt.Errorf("gateway: no PEM certificate found in TLS CA file %s", caFile)
+	}
+	tlsCfg.RootCAs = pool
+	return tlsCfg, nil
+}
+
 // dialOptions returns the connection options, including the token
 // injection interceptors bound to this Gateway (both unary and
 // streaming RPCs) and the raised message size limits matching the
 // server's default maximum payload size.
-func (g *Gateway) dialOptions() []grpc.DialOption {
+func (g *Gateway) dialOptions(tlsCfg *tls.Config) []grpc.DialOption {
 	return []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
 		grpc.WithUnaryInterceptor(g.injectToken),
 		grpc.WithStreamInterceptor(g.injectTokenStream),
 		grpc.WithDefaultCallOptions(

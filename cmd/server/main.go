@@ -6,7 +6,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net"
@@ -19,10 +21,13 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"golang.org/x/crypto/acme/autocert"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1"
 	"github.com/dmitriy/gophkeeper/internal/server/auth"
+	"github.com/dmitriy/gophkeeper/internal/server/certgen"
 	"github.com/dmitriy/gophkeeper/internal/server/config"
 	"github.com/dmitriy/gophkeeper/internal/server/middleware"
 	"github.com/dmitriy/gophkeeper/internal/server/repository/postgres"
@@ -45,6 +50,13 @@ const gracefulShutdownTimeout = 10 * time.Second
 const redacted = "***"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "gen-cert" {
+		if err := runGenCert(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "gophkeeper-server: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		// -h/--help already printed the usage to stdout; exit
 		// successfully.
@@ -107,7 +119,13 @@ func run() error {
 	const messageSizeHeadroom = 1 << 20
 	msgSize := int(cfg.MaxDataSize) + messageSizeHeadroom
 
+	transportCreds, err := transportCredentials(cfg)
+	if err != nil {
+		return err
+	}
+
 	grpcServer := grpc.NewServer(
+		grpc.Creds(transportCreds),
 		grpc.MaxRecvMsgSize(msgSize),
 		grpc.MaxSendMsgSize(msgSize),
 		grpc.ChainUnaryInterceptor(
@@ -165,6 +183,85 @@ func run() error {
 	logger.Info("shutdown complete")
 	return nil
 }
+
+// transportCredentials builds the server TLS credentials from the
+// resolved config: either a static certificate pair or an
+// autocert.Manager for automatic ACME issuance. The config loader
+// guarantees that exactly one TLS mode is configured; plaintext
+// serving is not supported.
+func transportCredentials(cfg *config.Config) (credentials.TransportCredentials, error) {
+	if cfg.AutocertDomain != "" {
+		manager := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(cfg.AutocertDomain),
+			Cache:      autocert.DirCache(cfg.AutocertCacheDir),
+		}
+		return credentials.NewTLS(&tls.Config{
+			GetCertificate: manager.GetCertificate,
+			MinVersion:     tls.VersionTLS12,
+		}), nil
+	}
+	creds, err := credentials.NewServerTLSFromFile(cfg.TLSCertFile, cfg.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load TLS certificate pair (%s, %s): %w", cfg.TLSCertFile, cfg.TLSKeyFile, err)
+	}
+	return creds, nil
+}
+
+// runGenCert parses gen-cert flags and writes a self-signed
+// certificate pair. It runs before the regular server config loading
+// so it never requires DATABASE_DSN or JWT_SECRET.
+func runGenCert(args []string) error {
+	fs := flag.NewFlagSet("gen-cert", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	outDir := fs.String("out-dir", "./certs", "output directory for server.crt and server.key")
+	cn := fs.String("cn", "", "certificate CommonName; defaults to the first DNS name")
+	years := fs.Int("years", 1, "certificate validity in years")
+	var dnsFlags, ipFlags certFlagValues
+	fs.Var(&dnsFlags, "dns", "DNS SAN entry, repeatable (e.g. --dns localhost)")
+	fs.Var(&ipFlags, "ip", "IP SAN entry, repeatable (e.g. --ip 127.0.0.1)")
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("gen-cert: parse flags: %w", err)
+	}
+	if len(dnsFlags) == 0 && len(ipFlags) == 0 {
+		return fmt.Errorf("gen-cert: at least one --dns or --ip SAN is required")
+	}
+	ips := make([]net.IP, 0, len(ipFlags))
+	for _, s := range ipFlags {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			return fmt.Errorf("gen-cert: invalid IP SAN %q", s)
+		}
+		ips = append(ips, ip)
+	}
+	certPath, keyPath, err := certgen.Generate(certgen.Options{
+		OutDir:     *outDir,
+		DNSNames:   dnsFlags,
+		IPs:        ips,
+		Years:      *years,
+		CommonName: *cn,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Self-signed TLS certificate pair written:\n  certificate: %s\n  private key: %s\n\n"+
+		"Start the server with:\n  --tls-cert %s --tls-key %s\n\n"+
+		"Point clients at the certificate:\n  gophkeeper-client --tls-ca %s ...\n",
+		certPath, keyPath, certPath, keyPath, certPath)
+	return nil
+}
+
+// certFlagValues collects repeated flag occurrences (--dns/--ip).
+type certFlagValues []string
+
+func (v *certFlagValues) String() string { return fmt.Sprint(*v) }
+
+func (v *certFlagValues) Set(value string) error {
+	*v = append(*v, value)
+	return nil
+}
+
+func (v *certFlagValues) values() []string { return *v }
 
 // newLogger creates the process logger with the given minimum level,
 // writing structured text to stderr.

@@ -17,6 +17,8 @@ import (
 var validArgs = []string{
 	"--dsn", "postgres://u:p@localhost:5432/gk",
 	"--jwt-secret", "secret",
+	"--tls-cert", "/tmp/certs/server.crt",
+	"--tls-key", "/tmp/certs/server.key",
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -46,6 +48,8 @@ func TestLoad(t *testing.T) {
 				"LOG_LEVEL":    "debug",
 				"DATABASE_DSN": "postgres://e:p@db:5432/e",
 				"JWT_SECRET":   "envsecret",
+				"TLS_CERT":     "/tmp/certs/server.crt",
+				"TLS_KEY":      "/tmp/certs/server.key",
 			},
 			want: &config.Config{
 				MaxDataSize: config.DefaultMaxDataSize,
@@ -54,6 +58,8 @@ func TestLoad(t *testing.T) {
 				JWTSecret:   "envsecret",
 				JWTTTL:      90 * time.Minute,
 				LogLevel:    slog.LevelDebug,
+				TLSCertFile: "/tmp/certs/server.crt",
+				TLSKeyFile:  "/tmp/certs/server.key",
 			},
 		},
 		{
@@ -71,6 +77,8 @@ func TestLoad(t *testing.T) {
 				"--jwt-secret", "flagsecret",
 				"--jwt-ttl", "48h",
 				"--log-level", "error",
+				"--tls-cert", "/tmp/certs/server.crt",
+				"--tls-key", "/tmp/certs/server.key",
 			},
 			want: &config.Config{
 				MaxDataSize: config.DefaultMaxDataSize,
@@ -79,6 +87,8 @@ func TestLoad(t *testing.T) {
 				JWTSecret:   "flagsecret",
 				JWTTTL:      48 * time.Hour,
 				LogLevel:    slog.LevelError,
+				TLSCertFile: "/tmp/certs/server.crt",
+				TLSKeyFile:  "/tmp/certs/server.key",
 			},
 		},
 		{
@@ -131,6 +141,8 @@ func TestLoad(t *testing.T) {
 				JWTSecret:   "secret",
 				JWTTTL:      2 * time.Hour,
 				LogLevel:    slog.LevelInfo,
+				TLSCertFile: "/tmp/certs/server.crt",
+				TLSKeyFile:  "/tmp/certs/server.key",
 			},
 		},
 		{
@@ -148,6 +160,45 @@ func TestLoad(t *testing.T) {
 			name:    "non-postgres dsn scheme rejected",
 			args:    []string{"--dsn", "mysql://u:p@localhost/db", "--jwt-secret", "secret"},
 			wantErr: "unsupported DSN scheme",
+		},
+		{
+			name:    "no tls mode at all",
+			args:    []string{"--dsn", "postgres://u:p@localhost:5432/gk", "--jwt-secret", "secret"},
+			wantErr: "TLS is required",
+		},
+		{
+			name:    "cert without key",
+			args:    []string{"--dsn", "postgres://u:p@localhost:5432/gk", "--jwt-secret", "secret", "--tls-cert", "/tmp/certs/server.crt"},
+			wantErr: "--tls-key",
+		},
+		{
+			name:    "key without cert",
+			args:    []string{"--dsn", "postgres://u:p@localhost:5432/gk", "--jwt-secret", "secret", "--tls-key", "/tmp/certs/server.key"},
+			wantErr: "--tls-cert",
+		},
+		{
+			name:    "cert pair conflicts with autocert",
+			args:    append(validArgs, "--autocert-domain", "gk.example.com"),
+			wantErr: "mutually exclusive",
+		},
+		{
+			name:    "empty autocert cache dir rejected",
+			args:    []string{"--dsn", "postgres://u:p@localhost:5432/gk", "--jwt-secret", "secret", "--autocert-domain", "gk.example.com", "--autocert-cache-dir", ""},
+			wantErr: "--autocert-cache-dir",
+		},
+		{
+			name: "autocert mode with default cache dir",
+			args: []string{"--dsn", "postgres://u:p@localhost:5432/gk", "--jwt-secret", "secret", "--autocert-domain", "gk.example.com"},
+			want: &config.Config{
+				MaxDataSize:      config.DefaultMaxDataSize,
+				Address:          ":50051",
+				DSN:              "postgres://u:p@localhost:5432/gk",
+				JWTSecret:        "secret",
+				JWTTTL:           24 * time.Hour,
+				LogLevel:         slog.LevelInfo,
+				AutocertDomain:   "gk.example.com",
+				AutocertCacheDir: config.DefaultAutocertCacheDir,
+			},
 		},
 		{
 			name:    "unknown flag",
@@ -169,6 +220,8 @@ func TestLoad(t *testing.T) {
 				JWTSecret:   "secret",
 				JWTTTL:      24 * time.Hour,
 				LogLevel:    slog.LevelInfo,
+				TLSCertFile: "/tmp/certs/server.crt",
+				TLSKeyFile:  "/tmp/certs/server.key",
 			},
 		},
 	}

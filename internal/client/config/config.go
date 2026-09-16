@@ -25,6 +25,9 @@ const (
 	EnvTokenPath = "GOPHKEEPER_TOKEN_PATH"
 	// EnvCachePath holds the path of the offline cache file.
 	EnvCachePath = "GOPHKEEPER_CACHE_PATH"
+	// EnvCAPath holds the path of the PEM CA certificate used to
+	// verify the TLS server certificate (self-signed scenario).
+	EnvCAPath = "GOPHKEEPER_CA_PATH"
 )
 
 // DefaultServer is the server address used when neither the
@@ -43,6 +46,12 @@ type Config struct {
 	// CachePath is the file path of the encrypted offline cache
 	// (the entry snapshot read when the server is unreachable).
 	CachePath string
+	// CAPath is the optional path to a PEM CA certificate used to
+	// verify the server TLS certificate (self-signed scenario,
+	// e.g. the server.crt produced by 'gophkeeper-server gen-cert').
+	// When empty the server is verified against the system root
+	// certificate store. The transport is always TLS.
+	CAPath string
 }
 
 // Resolve builds the configuration from the given flag values
@@ -53,7 +62,7 @@ type Config struct {
 // empty cache path falls back to $GOPHKEEPER_CACHE_PATH and then
 // cache.DefaultPath(). It fails only when one of the default paths
 // cannot be determined (no home directory).
-func Resolve(serverFlag, tokenFlag, cacheFlag string) (*Config, error) {
+func Resolve(serverFlag, tokenFlag, cacheFlag, caFlag string) (*Config, error) {
 	server := firstNonEmpty(serverFlag, os.Getenv(EnvServer), DefaultServer)
 
 	tokenPath, err := resolvePath(tokenFlag, os.Getenv(EnvTokenPath), token.DefaultPath)
@@ -64,8 +73,9 @@ func Resolve(serverFlag, tokenFlag, cacheFlag string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: resolve default cache path: %w", err)
 	}
+	caPath := firstNonEmpty(caFlag, os.Getenv(EnvCAPath))
 
-	return &Config{Server: server, TokenPath: tokenPath, CachePath: cachePath}, nil
+	return &Config{Server: server, TokenPath: tokenPath, CachePath: cachePath, CAPath: caPath}, nil
 }
 
 // resolvePath applies the flag > environment > default fallback for
