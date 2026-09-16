@@ -25,7 +25,7 @@ of it.`,
 				return err
 			}
 			entries, err := app.entries.List(cmd.Context())
-			if err != nil {
+			if err != nil && !app.noteOffline(err) {
 				return err
 			}
 			if typeFlag != "" {

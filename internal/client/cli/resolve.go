@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/dmitriy/gophkeeper/internal/client/service"
 )
 
 // resolveEntryID expands a (possibly truncated) entry id — as shown
@@ -18,7 +20,9 @@ func (a *App) resolveEntryID(ctx context.Context, id string) (string, error) {
 		return "", errors.New("entry id must not be empty")
 	}
 	entries, err := a.entries.List(ctx)
-	if err != nil {
+	if err != nil && !errors.Is(err, service.ErrOffline) {
+		// An offline List still returns the cached set: id
+		// resolution works without the server.
 		return "", err
 	}
 	var matches []string

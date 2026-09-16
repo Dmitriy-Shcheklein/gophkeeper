@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dmitriy/gophkeeper/internal/client/cache"
 	"github.com/dmitriy/gophkeeper/internal/client/config"
 	"github.com/dmitriy/gophkeeper/internal/client/gateway"
 	"github.com/dmitriy/gophkeeper/internal/client/model"
@@ -98,11 +99,12 @@ type App struct {
 	// authenticated path can be verified without a terminal.
 	runTUI func(auth authClient, entries entryClient) error
 
-	// serverFlag and tokenFlag receive the values of the root
-	// command's persistent flags (--server, --token-path); empty
-	// when the flags are not set.
+	// serverFlag, tokenFlag and cacheFlag receive the values of the
+	// root command's persistent flags (--server, --token-path,
+	// --cache-path); empty when the flags are not set.
 	serverFlag string
 	tokenFlag  string
+	cacheFlag  string
 
 	// auth and entries are the services used by the commands: the
 	// injected fakes in tests, or the lazily built real services.
@@ -135,19 +137,26 @@ func NewApp(version, buildDate, commit string) *App {
 }
 
 // connectReal builds the production service stack: a token store at
-// cfg.TokenPath, a gRPC gateway to cfg.Server and the service layer
-// on top of both. The returned function closes the connection.
+// cfg.TokenPath, the encrypted offline cache at cfg.CachePath, a gRPC
+// gateway to cfg.Server and the service layer on top of all three.
+// The service layer refreshes the cache after successful reads and
+// falls back to it when the server is unreachable. The returned
+// function closes the connection.
 func connectReal(cfg *config.Config) (authClient, entryClient, func(), error) {
 	store, err := token.New(cfg.TokenPath)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open token store: %w", err)
 	}
+	snapshot, err := cache.New(cfg.CachePath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("open offline cache: %w", err)
+	}
 	gw, err := gateway.New(cfg.Server, store)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return service.NewAuthService(gw, gw.TokenStore()),
-		service.NewEntryService(gw),
+	return service.NewAuthServiceWithCache(gw, gw.TokenStore(), snapshot),
+		service.NewEntryServiceWithCache(gw, snapshot),
 		func() { _ = gw.Close() },
 		nil
 }
@@ -161,7 +170,7 @@ func (a *App) initServices() error {
 	if a.connect == nil {
 		return errors.New("cli: no services configured")
 	}
-	cfg, err := config.Resolve(a.serverFlag, a.tokenFlag)
+	cfg, err := config.Resolve(a.serverFlag, a.tokenFlag, a.cacheFlag)
 	if err != nil {
 		return err
 	}
@@ -201,6 +210,18 @@ func (a *App) resolvePassword(flagValue string) (string, error) {
 		return "", errors.New("no password prompt available; use --password")
 	}
 	return a.PromptPassword()
+}
+
+// noteOffline reports an offline (cache-served) result: it prints a
+// stderr notice and returns true when err marks a result served from
+// the local cache while the server is unreachable. Commands treat
+// such results as usable data instead of failures.
+func (a *App) noteOffline(err error) bool {
+	if !errors.Is(err, service.ErrOffline) {
+		return false
+	}
+	_, _ = fmt.Fprintln(a.Err, "server unreachable — showing cached data (offline mode)")
+	return true
 }
 
 // confirm asks the user for a yes/no confirmation, reading a single

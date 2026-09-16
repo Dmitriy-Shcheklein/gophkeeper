@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/dmitriy/gophkeeper/internal/client/service"
 	"github.com/spf13/cobra"
 )
 
@@ -22,10 +24,14 @@ The TUI loads the same state when it opens.`,
 				return err
 			}
 			entries, err := app.entries.Sync(cmd.Context())
-			if err != nil {
+			if err != nil && !app.noteOffline(err) {
 				return err
 			}
-			_, _ = fmt.Fprintf(app.Out, "synced %d entries (this replaces the local view with the server state)\n", len(entries))
+			if errors.Is(err, service.ErrOffline) {
+				_, _ = fmt.Fprintf(app.Out, "showing %d cached entries (the server state is unknown offline)\n", len(entries))
+			} else {
+				_, _ = fmt.Fprintf(app.Out, "synced %d entries (this replaces the local view with the server state)\n", len(entries))
+			}
 			renderTable(app.Out, entries)
 			return nil
 		},

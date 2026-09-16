@@ -32,6 +32,8 @@ func friendlyMessage(err error) string {
 		return "not authenticated, run `gophkeeper login`"
 	case errors.Is(err, gateway.ErrConflict):
 		return "conflict: entry was modified by another client, re-fetch with `gophkeeper get --id=...` and retry"
+	case errors.Is(err, service.ErrOffline):
+		return "server unreachable: this action is not available offline"
 	case errors.Is(err, gateway.ErrNotFound):
 		return "entry not found"
 	case errors.Is(err, service.ErrEmptyLogin),

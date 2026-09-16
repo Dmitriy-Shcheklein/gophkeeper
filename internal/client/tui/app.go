@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/dmitriy/gophkeeper/internal/client/model"
 	"github.com/dmitriy/gophkeeper/internal/client/render"
+	"github.com/dmitriy/gophkeeper/internal/client/service"
 )
 
 // screen identifies a screen of the navigation stack.
@@ -318,6 +320,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case entriesLoadedMsg:
 		m.loading = false
 		if msg.err != nil {
+			if errors.Is(msg.err, service.ErrOffline) && len(msg.entries) > 0 {
+				// The server is unreachable but the local cache had
+				// data: show it instead of an empty list.
+				m.all = msg.entries
+				m.applyFilter()
+				if msg.background {
+					m.setStatus("offline: still showing %d cached entries", len(msg.entries))
+				} else {
+					m.setStatus("offline: showing %d cached entries (server unreachable)", len(msg.entries))
+				}
+				return m, nil
+			}
 			if msg.background {
 				// An auto-sync failure is transient (network etc.);
 				// report it but keep the previously loaded set.

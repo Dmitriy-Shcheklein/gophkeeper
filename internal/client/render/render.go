@@ -254,6 +254,13 @@ func Entry(w io.Writer, e *model.Entry) {
 	_, _ = fmt.Fprintf(w, "Updated:  %s\n", e.UpdatedAt.Format(time.RFC3339))
 	_, _ = fmt.Fprintln(w, "Data:")
 
+	// Payload-free views (offline cache, metadata-only listings of
+	// payload-bearing types): the content is not available locally.
+	if len(e.Data) == 0 && e.DataSize > 0 && e.Type != model.EntryTypeBinary {
+		_, _ = fmt.Fprintf(w, "  <payload not shown (%s total) — connect to the server to view>\n", SizeLabel(e.DataSize))
+		return
+	}
+
 	switch e.Type {
 	case model.EntryTypeLoginPassword:
 		login, err := DecodeLogin(e.Data)

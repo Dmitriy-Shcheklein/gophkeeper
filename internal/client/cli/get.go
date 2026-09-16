@@ -40,7 +40,12 @@ loading it fully into memory.`,
 			}
 			entry, err := app.entries.Get(cmd.Context(), fullID)
 			if err != nil {
-				return err
+				// Continue only when offline fallback produced a
+				// cached entry; a nil entry (e.g. unknown id
+				// offline) must not reach the renderer.
+				if entry == nil || !app.noteOffline(err) {
+					return err
+				}
 			}
 			if out != "" && entry.Type == model.EntryTypeBinary {
 				return runDownloadBinary(cmd.Context(), app, entry, out)

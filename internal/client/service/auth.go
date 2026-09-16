@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dmitriy/gophkeeper/internal/client/cache"
 	"github.com/dmitriy/gophkeeper/internal/client/gateway"
 	"github.com/dmitriy/gophkeeper/internal/client/token"
 )
@@ -47,14 +48,36 @@ type AuthService struct {
 	// gateway itself hands its store out for exactly this purpose
 	// (see gateway.Gateway.TokenStore).
 	store *token.Store
+	// cache is the optional offline snapshot store; it is cleared on
+	// every auth lifecycle change (login, register, logout) so a
+	// cache can never outlive the account that produced it. nil
+	// disables the offline cache.
+	cache *cache.Store
 }
 
 // NewAuthService returns an AuthService working through gw and
-// persisting/restoring the token via store. Both arguments must not
-// be nil. The constructor does not load a persisted token: call
-// Restore explicitly (see the package comment for the lifecycle).
+// persisting/restoring the token via store, without the offline
+// cache. Both arguments must not be nil. The constructor does not
+// load a persisted token: call Restore explicitly (see the package
+// comment for the lifecycle).
 func NewAuthService(gw authGateway, store *token.Store) *AuthService {
 	return &AuthService{gw: gw, store: store}
+}
+
+// NewAuthServiceWithCache returns an AuthService that additionally
+// manages the offline cache lifecycle: the snapshot is cleared on
+// login, register and logout so cached data always belongs to the
+// currently authenticated account.
+func NewAuthServiceWithCache(gw authGateway, store *token.Store, c *cache.Store) *AuthService {
+	return &AuthService{gw: gw, store: store, cache: c}
+}
+
+// clearCache drops the offline snapshot (best-effort: a cache
+// failure must not fail the auth operation).
+func (s *AuthService) clearCache() {
+	if s.cache != nil {
+		_ = s.cache.Clear()
+	}
 }
 
 // Register creates a new account. The login and password must be
@@ -69,6 +92,7 @@ func (s *AuthService) Register(ctx context.Context, login, password string) erro
 	if _, err := s.gw.Register(ctx, login, password); err != nil {
 		return fmt.Errorf("service: register: %w", err)
 	}
+	s.clearCache()
 	return nil
 }
 
@@ -81,6 +105,7 @@ func (s *AuthService) Login(ctx context.Context, login, password string) error {
 	if _, err := s.gw.Login(ctx, login, password); err != nil {
 		return fmt.Errorf("service: login: %w", err)
 	}
+	s.clearCache()
 	return nil
 }
 
@@ -91,6 +116,7 @@ func (s *AuthService) Logout() error {
 		return fmt.Errorf("service: logout: %w", err)
 	}
 	s.gw.SetToken("")
+	s.clearCache()
 	return nil
 }
 

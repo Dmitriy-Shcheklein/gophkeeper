@@ -28,6 +28,8 @@ func NewRootCommand(app *App) *cobra.Command {
 		"GophKeeper server address host:port ($"+config.EnvServer+", default "+config.DefaultServer+")")
 	root.PersistentFlags().StringVar(&app.tokenFlag, "token-path", "",
 		"token file path ($GOPHKEEPER_TOKEN_PATH, default ~/.gophkeeper/token)")
+	root.PersistentFlags().StringVar(&app.cacheFlag, "cache-path", "",
+		"offline cache file path ($GOPHKEEPER_CACHE_PATH, default ~/.gophkeeper/cache.json)")
 
 	root.AddCommand(
 		newRegisterCommand(app),
