@@ -187,8 +187,8 @@ func (s *EntryService) BeginUpload(ctx context.Context, userID string, header *m
 		return &ChunkedUpload{svc: s, entry: entry, hash: sha256.New()}, nil
 	}
 
-	if header.ID == "" {
-		return nil, ErrEmptyEntryID
+	if err := validateEntryID(header.ID); err != nil {
+		return nil, err
 	}
 	target := &model.Entry{
 		ID:       header.ID,

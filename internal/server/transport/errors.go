@@ -24,6 +24,7 @@ var invalidArgumentErrors = []error{
 	service.ErrPasswordTooLong,
 	service.ErrEmptyUserID,
 	service.ErrEmptyEntryID,
+	service.ErrInvalidEntryID,
 	service.ErrInvalidEntryType,
 	service.ErrEmptyLabel,
 	service.ErrLabelTooLong,

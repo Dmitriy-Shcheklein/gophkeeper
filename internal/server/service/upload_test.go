@@ -211,9 +211,14 @@ func TestUploadSessionUpdateStaleVersion(t *testing.T) {
 	assert.ErrorIs(t, err, model.ErrConflict)
 
 	_, err = svc.BeginUpload(ctx, "user-1", &model.Entry{
-		ID: "missing-id", Type: model.EntryTypeText, Label: "note",
+		ID: testUUIDMissing, Type: model.EntryTypeText, Label: "note",
 	}, 1)
 	assert.ErrorIs(t, err, model.ErrNotFound)
+
+	_, err = svc.BeginUpload(ctx, "user-1", &model.Entry{
+		ID: "not-a-uuid", Type: model.EntryTypeText, Label: "note",
+	}, 1)
+	assert.ErrorIs(t, err, ErrInvalidEntryID)
 }
 
 func TestUploadSessionUpdateAbortKeepsOldContent(t *testing.T) {

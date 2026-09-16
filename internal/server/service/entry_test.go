@@ -49,7 +49,7 @@ func (m *mockEntryRepo) Create(_ context.Context, entry *model.Entry) error {
 		return m.createErr
 	}
 	id := atomic.AddInt64(&m.nextID, 1)
-	entry.ID = fmt.Sprintf("e%d", id)
+	entry.ID = fmt.Sprintf("%08x-0000-4000-8000-%012x", id, id)
 	entry.Version = 1
 	entry.CreatedAt = time.Now()
 	entry.UpdatedAt = entry.CreatedAt
@@ -64,7 +64,7 @@ func (m *mockEntryRepo) CreatePending(_ context.Context, entry *model.Entry) err
 		return m.createErr
 	}
 	id := atomic.AddInt64(&m.nextID, 1)
-	entry.ID = fmt.Sprintf("e%d", id)
+	entry.ID = fmt.Sprintf("%08x-0000-4000-8000-%012x", id, id)
 	entry.Version = 1
 	entry.CreatedAt = time.Now()
 	entry.UpdatedAt = entry.CreatedAt
@@ -259,6 +259,15 @@ func (m *mockEntryRepo) Delete(_ context.Context, userID, entryID string) error 
 	return nil
 }
 
+// Test UUIDs standing in for the database-generated identifiers the
+// service validates before hitting the repository.
+const (
+	testUUID1       = "11111111-1111-4111-8111-111111111111"
+	testUUID2       = "22222222-2222-4222-8222-222222222222"
+	testUUID3       = "33333333-3333-4333-8333-333333333333"
+	testUUIDMissing = "99999999-9999-4999-8999-999999999999"
+)
+
 func newTestEntryService() (*EntryService, *mockEntryRepo) {
 	repo := newMockEntryRepo()
 	return NewEntryService(repo), repo
@@ -392,13 +401,13 @@ func TestEntryCreateValidation(t *testing.T) {
 
 func TestEntryUpdateAcceptedAtBoundary(t *testing.T) {
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{
-		ID: "e1", UserID: "user-1", Type: model.EntryTypeText,
+	repo.entries[testUUID1] = &model.Entry{
+		ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText,
 		Label: "old", Data: []byte("old"), Version: 1,
 	}
 
 	updated, err := svc.Update(context.Background(), "user-1", &model.Entry{
-		ID:       "e1",
+		ID:       testUUID1,
 		UserID:   "user-1",
 		Type:     model.EntryTypeText,
 		Label:    strings.Repeat("a", 255),
@@ -437,24 +446,24 @@ func TestEntryCreateRepoErrorPropagates(t *testing.T) {
 
 func TestEntryGetSuccess(t *testing.T) {
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d")}
+	repo.entries[testUUID1] = &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d")}
 
-	got, err := svc.Get(context.Background(), "user-1", "e1")
+	got, err := svc.Get(context.Background(), "user-1", testUUID1)
 	require.NoError(t, err)
-	assert.Same(t, repo.entries["e1"], got)
+	assert.Same(t, repo.entries[testUUID1], got)
 }
 
 func TestEntryGetNotFound(t *testing.T) {
 	svc, _ := newTestEntryService()
 
-	_, err := svc.Get(context.Background(), "user-1", "missing")
+	_, err := svc.Get(context.Background(), "user-1", testUUIDMissing)
 	assert.ErrorIs(t, err, model.ErrNotFound)
 }
 
 func TestEntryGetEmptyUserID(t *testing.T) {
 	svc, _ := newTestEntryService()
 
-	_, err := svc.Get(context.Background(), "", "e1")
+	_, err := svc.Get(context.Background(), "", testUUID1)
 	assert.ErrorIs(t, err, ErrEmptyUserID)
 }
 
@@ -481,7 +490,7 @@ func TestEntryList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, repo := newTestEntryService()
-			repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d")}
+			repo.entries[testUUID1] = &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d")}
 
 			got, err := svc.List(context.Background(), "user-1", tt.filter, true)
 			if tt.wantErr != nil {
@@ -490,7 +499,7 @@ func TestEntryList(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, got, 1)
-			assert.Same(t, repo.entries["e1"], got[0])
+			assert.Same(t, repo.entries[testUUID1], got[0])
 
 			if tt.filter == nil {
 				assert.Nil(t, repo.lastListFilter)
@@ -512,13 +521,13 @@ func TestEntryListRepoErrorPropagates(t *testing.T) {
 
 func TestEntryUpdateSuccess(t *testing.T) {
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{
-		ID: "e1", UserID: "user-1", Type: model.EntryTypeText,
+	repo.entries[testUUID1] = &model.Entry{
+		ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText,
 		Label: "old", Data: []byte("old"), Version: 3,
 	}
 
 	updated, err := svc.Update(context.Background(), "user-1", &model.Entry{
-		ID: "e1", UserID: "user-1", Type: model.EntryTypeText,
+		ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText,
 		Label: "new", Metadata: "meta", Data: []byte("new"), Version: 3,
 	})
 	require.NoError(t, err)
@@ -526,7 +535,7 @@ func TestEntryUpdateSuccess(t *testing.T) {
 	assert.Equal(t, "meta", updated.Metadata)
 	assert.Equal(t, []byte("new"), updated.Data)
 	assert.Equal(t, int64(4), updated.Version)
-	assert.Equal(t, "new", repo.entries["e1"].Label)
+	assert.Equal(t, "new", repo.entries[testUUID1].Label)
 }
 
 func TestEntryUpdateValidation(t *testing.T) {
@@ -542,27 +551,27 @@ func TestEntryUpdateValidation(t *testing.T) {
 		},
 		{
 			name:  "version below one",
-			entry: &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Version: 0},
+			entry: &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Version: 0},
 			want:  ErrInvalidVersion,
 		},
 		{
 			name:  "bad label",
-			entry: &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d"), Version: 1},
+			entry: &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d"), Version: 1},
 			want:  ErrEmptyLabel,
 		},
 		{
 			name:  "empty data",
-			entry: &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Version: 1},
+			entry: &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Version: 1},
 			want:  ErrEmptyData,
 		},
 		{
 			name:  "invalid type",
-			entry: &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryType(42), Label: "l", Data: []byte("d"), Version: 1},
+			entry: &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryType(42), Label: "l", Data: []byte("d"), Version: 1},
 			want:  ErrInvalidEntryType,
 		},
 		{
 			name:  "metadata too long",
-			entry: &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Metadata: strings.Repeat("m", 10001), Version: 1},
+			entry: &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Metadata: strings.Repeat("m", 10001), Version: 1},
 			want:  ErrMetadataTooLong,
 		},
 	}
@@ -577,10 +586,10 @@ func TestEntryUpdateValidation(t *testing.T) {
 
 func TestEntryUpdateConflict(t *testing.T) {
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Version: 5}
+	repo.entries[testUUID1] = &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Version: 5}
 
 	_, err := svc.Update(context.Background(), "user-1", &model.Entry{
-		ID: "e1", UserID: "user-1", Type: model.EntryTypeText,
+		ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText,
 		Label: "l", Data: []byte("d"), Version: 4,
 	})
 	assert.ErrorIs(t, err, model.ErrConflict)
@@ -590,7 +599,7 @@ func TestEntryUpdateNotFound(t *testing.T) {
 	svc, _ := newTestEntryService()
 
 	_, err := svc.Update(context.Background(), "user-1", &model.Entry{
-		ID: "missing", UserID: "user-1", Type: model.EntryTypeText,
+		ID: testUUIDMissing, UserID: "user-1", Type: model.EntryTypeText,
 		Label: "l", Data: []byte("d"), Version: 1,
 	})
 	assert.ErrorIs(t, err, model.ErrNotFound)
@@ -599,36 +608,36 @@ func TestEntryUpdateNotFound(t *testing.T) {
 func TestEntryUpdateForcesUserID(t *testing.T) {
 	// The authenticated user wins over any UserID carried in the entry.
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Version: 1}
+	repo.entries[testUUID1] = &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d"), Version: 1}
 
 	_, err := svc.Update(context.Background(), "user-1", &model.Entry{
-		ID: "e1", UserID: "someone-else", Type: model.EntryTypeText,
+		ID: testUUID1, UserID: "someone-else", Type: model.EntryTypeText,
 		Label: "new", Data: []byte("new"), Version: 1,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "new", repo.entries["e1"].Label)
+	assert.Equal(t, "new", repo.entries[testUUID1].Label)
 }
 
 func TestEntryDeleteSuccess(t *testing.T) {
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d")}
+	repo.entries[testUUID1] = &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Label: "l", Data: []byte("d")}
 
-	err := svc.Delete(context.Background(), "user-1", "e1")
+	err := svc.Delete(context.Background(), "user-1", testUUID1)
 	require.NoError(t, err)
-	assert.NotContains(t, repo.entries, "e1")
+	assert.NotContains(t, repo.entries, testUUID1)
 }
 
 func TestEntryDeleteNotFound(t *testing.T) {
 	svc, _ := newTestEntryService()
 
-	err := svc.Delete(context.Background(), "user-1", "missing")
+	err := svc.Delete(context.Background(), "user-1", testUUIDMissing)
 	assert.ErrorIs(t, err, model.ErrNotFound)
 }
 
 func TestEntryDeleteEmptyUserID(t *testing.T) {
 	svc, _ := newTestEntryService()
 
-	err := svc.Delete(context.Background(), "", "e1")
+	err := svc.Delete(context.Background(), "", testUUID1)
 	assert.ErrorIs(t, err, ErrEmptyUserID)
 }
 
@@ -641,8 +650,8 @@ func TestEntryDeleteEmptyEntryID(t *testing.T) {
 
 func TestEntrySyncReturnsFullList(t *testing.T) {
 	svc, repo := newTestEntryService()
-	repo.entries["e1"] = &model.Entry{ID: "e1", UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d1")}
-	repo.entries["e2"] = &model.Entry{ID: "e2", UserID: "user-1", Type: model.EntryTypeCard, Data: []byte("d2")}
+	repo.entries[testUUID1] = &model.Entry{ID: testUUID1, UserID: "user-1", Type: model.EntryTypeText, Data: []byte("d1")}
+	repo.entries[testUUID2] = &model.Entry{ID: testUUID2, UserID: "user-1", Type: model.EntryTypeCard, Data: []byte("d2")}
 	repo.entries["foreign"] = &model.Entry{ID: "foreign", UserID: "user-2", Type: model.EntryTypeText, Data: []byte("d3")}
 
 	got, err := svc.Sync(context.Background(), "user-1", true)
@@ -658,4 +667,34 @@ func TestEntrySyncEmptyUserID(t *testing.T) {
 
 	_, err := svc.Sync(context.Background(), "", true)
 	assert.ErrorIs(t, err, ErrEmptyUserID)
+}
+
+// TestEntryIDMustBeUUID verifies the service rejects malformed entry
+// ids at the boundary: they can never match a stored entry (ids are
+// database-generated UUIDs) and would only produce driver-level
+// errors if they reached the repository.
+func TestEntryIDMustBeUUID(t *testing.T) {
+	svc, _ := newTestEntryService()
+	ctx := context.Background()
+
+	for _, id := range []string{"zzzzzzzz", "e1", "missing-id", "../../etc"} {
+		_, err := svc.Get(ctx, "user-1", id)
+		assert.ErrorIs(t, err, ErrInvalidEntryID, "Get(%q)", id)
+
+		err = svc.Delete(ctx, "user-1", id)
+		assert.ErrorIs(t, err, ErrInvalidEntryID, "Delete(%q)", id)
+
+		_, _, err = svc.EntryDataInfo(ctx, "user-1", id)
+		assert.ErrorIs(t, err, ErrInvalidEntryID, "EntryDataInfo(%q)", id)
+
+		_, err = svc.DownloadChunk(ctx, "user-1", id, 0)
+		assert.ErrorIs(t, err, ErrInvalidEntryID, "DownloadChunk(%q)", id)
+
+		_, err = svc.Update(ctx, "user-1", &model.Entry{ID: id, Version: 1, Type: model.EntryTypeText, Label: "l", Data: []byte("d")})
+		assert.ErrorIs(t, err, ErrInvalidEntryID, "Update(%q)", id)
+	}
+
+	// Well-formed but non-existent id keeps the not-found semantics.
+	_, err := svc.Get(ctx, "user-1", testUUIDMissing)
+	assert.ErrorIs(t, err, model.ErrNotFound)
 }

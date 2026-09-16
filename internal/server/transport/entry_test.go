@@ -155,6 +155,12 @@ func TestEntryHandler_Create_ErrorMapping(t *testing.T) {
 			wantMsg:    service.ErrLabelTooLong.Error(),
 		},
 		{
+			name:       "invalid entry id",
+			serviceErr: service.ErrInvalidEntryID,
+			wantCode:   codes.InvalidArgument,
+			wantMsg:    service.ErrInvalidEntryID.Error(),
+		},
+		{
 			name:       "internal error is generic",
 			serviceErr: errors.New("db: connection refused"),
 			wantCode:   codes.Internal,
