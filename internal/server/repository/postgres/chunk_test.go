@@ -180,6 +180,37 @@ func TestEntryRepository_ChunkedUpdate(t *testing.T) {
 	assert.Equal(t, []byte("v3"), chunk)
 }
 
+// TestEntryRepository_PlainUpdateDropsStaleChunks guards the storage
+// invariant "either inline payload or chunks, never both": a plain
+// (non-streaming) update of an entry that was previously stored as
+// chunks must delete the stale chunk rows, otherwise the download path
+// keeps serving the old chunked payload.
+func TestEntryRepository_PlainUpdateDropsStaleChunks(t *testing.T) {
+	resetTables(t)
+	user := createTestUser(t, "plain-update-owner")
+	entries := testStorage.Entries()
+
+	created := seedChunkedEntry(t, user.ID, "file", []byte("old-payload"))
+
+	updated := &model.Entry{
+		ID:      created.ID,
+		UserID:  user.ID,
+		Version: created.Version,
+		Label:   "file",
+		Data:    []byte("new-inline-payload"),
+	}
+	require.NoError(t, entries.Update(t.Context(), updated))
+
+	stored, err := entries.GetByID(t.Context(), user.ID, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("new-inline-payload"), stored.Data)
+	assert.Equal(t, int64(len("new-inline-payload")), stored.DataSize)
+
+	count, err := entries.ChunkCount(t.Context(), user.ID, created.ID)
+	require.NoError(t, err)
+	assert.Zero(t, count, "a plain update must drop the stale chunk rows")
+}
+
 func TestEntryRepository_PrepareUpdateErrors(t *testing.T) {
 	resetTables(t)
 	user := createTestUser(t, "prepare-owner")

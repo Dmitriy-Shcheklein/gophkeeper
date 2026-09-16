@@ -108,6 +108,11 @@ func (r *entryRepository) List(ctx context.Context, userID string, entryType *mo
 // and updated timestamp are filled back into entry. If no row was
 // affected, the entry is looked up to distinguish a version conflict
 // (model.ErrConflict) from a missing entry (model.ErrNotFound).
+// Update applies a plain (non-streaming) update guarded by the
+// optimistic-lock version: the payload is stored inline, so any stale
+// chunk rows from a previous streaming upload are dropped in the same
+// transaction (storage invariant: an entry is either inline or
+// chunked, never both).
 func (r *entryRepository) Update(ctx context.Context, entry *model.Entry) error {
 	const q = `
 		UPDATE entries
@@ -116,17 +121,32 @@ func (r *entryRepository) Update(ctx context.Context, entry *model.Entry) error 
 		    version = version + 1, updated_at = NOW()
 		WHERE id = $1 AND user_id = $2 AND version = $3 AND state = 1
 		RETURNING version, updated_at`
+	const dropChunksQ = `DELETE FROM entry_chunks WHERE entry_id = $1`
 
-	err := r.pool.QueryRow(ctx, q,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("postgres: update entry %q: %w", entry.ID, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	err = tx.QueryRow(ctx, q,
 		entry.ID, entry.UserID, entry.Version, entry.Label, entry.Metadata, entry.Data,
 	).Scan(&entry.Version, &entry.UpdatedAt)
 	if err == nil {
+		if _, err := tx.Exec(ctx, dropChunksQ, entry.ID); err != nil {
+			return fmt.Errorf("postgres: update entry %q: %w", entry.ID, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("postgres: update entry %q: %w", entry.ID, err)
+		}
 		entry.DataSize = int64(len(entry.Data))
 		return nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("postgres: update entry %q: %w", entry.ID, err)
 	}
+
+	_ = tx.Rollback(ctx)
 
 	const existsQ = `SELECT 1 FROM entries WHERE id = $1 AND user_id = $2 AND state = 1`
 	var one int
