@@ -1,7 +1,11 @@
+-- Supported entry types. Labels mirror the EntryType enum of the
+-- domain model and the public gRPC API.
+CREATE TYPE entry_type AS ENUM ('login_password', 'text', 'binary', 'card');
+
 CREATE TABLE entries (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type       SMALLINT NOT NULL CHECK (type IN (1, 2, 3, 4)), -- 1=login/password, 2=text, 3=binary, 4=card
+    type       entry_type NOT NULL,
     label      VARCHAR(255) NOT NULL,
     metadata   TEXT,
     data       BYTEA NOT NULL,

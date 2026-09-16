@@ -374,7 +374,7 @@ func (r *entryRepository) Chunk(ctx context.Context, userID, entryID string, seq
 func scanEntry(row pgx.Row) (*model.Entry, error) {
 	var (
 		entry    model.Entry
-		dbType   int16
+		dbType   string
 		dbState  int16
 		dataSize int64
 		version  int64
@@ -387,20 +387,55 @@ func scanEntry(row pgx.Row) (*model.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry.Type = entryTypeFromDB(dbType)
+	entryType, err := entryTypeFromDB(dbType)
+	if err != nil {
+		return nil, err
+	}
+	entry.Type = entryType
 	entry.DataSize = dataSize
 	entry.Version = version
 	entry.State = model.EntryState(dbState)
 	return &entry, nil
 }
 
-// entryTypeToDB converts a domain entry type to its SMALLINT
-// representation.
-func entryTypeToDB(t model.EntryType) int16 {
-	return int16(t)
+// entry_type_enum mirrors the entry_type PostgreSQL enum created by
+// migration 000002; the labels match the domain EntryType values.
+const (
+	dbEntryTypeLoginPassword = "login_password"
+	dbEntryTypeText          = "text"
+	dbEntryTypeBinary        = "binary"
+	dbEntryTypeCard          = "card"
+)
+
+// entryTypeToDB converts a domain entry type to its entry_type enum
+// label stored in the database.
+func entryTypeToDB(t model.EntryType) string {
+	switch t {
+	case model.EntryTypeLoginPassword:
+		return dbEntryTypeLoginPassword
+	case model.EntryTypeText:
+		return dbEntryTypeText
+	case model.EntryTypeBinary:
+		return dbEntryTypeBinary
+	case model.EntryTypeCard:
+		return dbEntryTypeCard
+	}
+	return ""
 }
 
-// entryTypeFromDB converts a SMALLINT value back to a domain entry type.
-func entryTypeFromDB(v int16) model.EntryType {
-	return model.EntryType(v)
+// entryTypeFromDB converts an entry_type enum label back to a domain
+// entry type. An unknown label means the schema and the code have
+// drifted apart and fails the query loudly.
+func entryTypeFromDB(v string) (model.EntryType, error) {
+	switch v {
+	case dbEntryTypeLoginPassword:
+		return model.EntryTypeLoginPassword, nil
+	case dbEntryTypeText:
+		return model.EntryTypeText, nil
+	case dbEntryTypeBinary:
+		return model.EntryTypeBinary, nil
+	case dbEntryTypeCard:
+		return model.EntryTypeCard, nil
+	}
+	return 0, fmt.Errorf("postgres: unknown entry type %q", v)
 }
