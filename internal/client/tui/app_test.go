@@ -341,7 +341,7 @@ func sampleEntries(t *testing.T) []*model.Entry {
 	return []*model.Entry{
 		{
 			ID: "e1", Type: model.EntryTypeLoginPassword, Label: "github",
-			Data: login, Version: 2,
+			Metadata: "alice@corp.example", Data: login, Version: 2,
 			CreatedAt: time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC),
 			UpdatedAt: time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC),
 		},
@@ -467,6 +467,32 @@ func TestFilterByLabel(t *testing.T) {
 	require.False(t, m.filtering)
 	require.Empty(t, m.filter)
 	require.Len(t, m.visible, 2)
+}
+
+// TestFilterByMetadata verifies the filter matches entry metadata:
+// users often put searchable info (site address, bank name, account
+// name) there, so a hit must be found even when the word is absent
+// from the label.
+func TestFilterByMetadata(t *testing.T) {
+	entries := newFakeEntries(sampleEntries(t)...)
+	m := load(t, newAppModel(authed(), entries), entries)
+
+	m = send(m, "/").(appModel)
+	// The word exists only in the metadata of the github entry.
+	m = send(m, "c", "o", "r", "p").(appModel)
+	m = send(m, "enter").(appModel)
+	require.False(t, m.filtering)
+	require.Len(t, m.visible, 1)
+	require.Equal(t, "github", m.visible[0].Label)
+	require.Contains(t, m.View(), "github")
+	require.NotContains(t, m.View(), "bank")
+
+	// A word that matches no metadata and no label leaves the list
+	// empty.
+	m = send(m, "/").(appModel)
+	m = send(m, "z", "z", "z").(appModel)
+	m = send(m, "enter").(appModel)
+	require.Empty(t, m.visible)
 }
 
 func TestQuitFromList(t *testing.T) {

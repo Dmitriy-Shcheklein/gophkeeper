@@ -262,6 +262,7 @@ func (m *appModel) applyFilter() {
 		m.visible = make([]*model.Entry, 0, len(m.all))
 		for _, e := range m.all {
 			if strings.Contains(strings.ToLower(e.Label), f) ||
+				strings.Contains(strings.ToLower(e.Metadata), f) ||
 				strings.Contains(render.TypeLabel(e.Type), f) {
 				m.visible = append(m.visible, e)
 			}
