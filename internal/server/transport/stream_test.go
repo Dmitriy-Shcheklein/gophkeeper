@@ -51,7 +51,7 @@ type recordingSession struct {
 	result    *model.Entry
 }
 
-func (s *recordingSession) AddChunk(data []byte) error {
+func (s *recordingSession) AddChunk(_ context.Context, data []byte) error {
 	if s.addErr != nil {
 		return s.addErr
 	}

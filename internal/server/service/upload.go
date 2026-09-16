@@ -43,9 +43,12 @@ var (
 // through AddChunk, the footer digest and Commit finalize it and Abort
 // rolls everything back when the stream fails midway.
 type UploadSession interface {
-	// AddChunk appends one payload chunk. Errors abort the eligibility
-	// of the session: after a failed AddChunk the transport must Abort.
-	AddChunk(data []byte) error
+	// AddChunk appends one payload chunk. ctx is the upload stream
+	// context: it is cancelled when the client disconnects, letting
+	// the in-flight database write stop early. Errors abort the
+	// eligibility of the session: after a failed AddChunk the
+	// transport must Abort.
+	AddChunk(ctx context.Context, data []byte) error
 	// Commit verifies the hex-encoded SHA-256 digest of the whole
 	// payload and finalizes the upload, returning the stored entry.
 	Commit(ctx context.Context, sha256hex string) (*model.Entry, error)
@@ -68,8 +71,9 @@ type ChunkedUpload struct {
 
 // AddChunk appends one payload chunk to the pending entry, enforcing
 // the per-chunk and total size limits. The digest is computed over the
-// chunks as they are accepted.
-func (u *ChunkedUpload) AddChunk(data []byte) error {
+// chunks as they are accepted. ctx is the upload stream context, so a
+// client disconnect cancels the pending database write.
+func (u *ChunkedUpload) AddChunk(ctx context.Context, data []byte) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -82,7 +86,7 @@ func (u *ChunkedUpload) AddChunk(data []byte) error {
 	if _, err := u.hash.Write(data); err != nil {
 		return fmt.Errorf("service: hash chunk: %w", err)
 	}
-	if err := u.svc.entries.AppendChunk(context.Background(), u.entry.ID, u.seq, data); err != nil {
+	if err := u.svc.entries.AppendChunk(ctx, u.entry.ID, u.seq, data); err != nil {
 		return fmt.Errorf("service: append chunk: %w", err)
 	}
 	u.seq++

@@ -73,7 +73,7 @@ func TestUploadSessionCreate(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, c := range chunks {
-		require.NoError(t, session.AddChunk(c))
+		require.NoError(t, session.AddChunk(ctx, c))
 	}
 
 	stored, err := session.Commit(ctx, digestOf(chunks...))
@@ -91,7 +91,7 @@ func TestUploadSessionCreate(t *testing.T) {
 
 	// The session is spent: further chunks are not accepted into the
 	// committed entry (extra chunk gets stored but the entry is done).
-	require.NoError(t, session.AddChunk([]byte("late")))
+	require.NoError(t, session.AddChunk(ctx, []byte("late")))
 	listed, err := svc.List(ctx, "user-1", nil, false)
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
@@ -127,7 +127,7 @@ func TestUploadSessionChecksumMismatch(t *testing.T) {
 		Type: model.EntryTypeBinary, Label: "corrupt",
 	}, 0)
 	require.NoError(t, err)
-	require.NoError(t, session.AddChunk([]byte("payload")))
+	require.NoError(t, session.AddChunk(ctx, []byte("payload")))
 
 	_, err = session.Commit(ctx, digestOf([]byte("other-payload")))
 	assert.ErrorIs(t, err, ErrChecksumMismatch)
@@ -142,7 +142,7 @@ func TestUploadSessionChunkLimits(t *testing.T) {
 	}, 0)
 	require.NoError(t, err)
 
-	err = session.AddChunk(make([]byte, MaxChunkSize+1))
+	err = session.AddChunk(ctx, make([]byte, MaxChunkSize+1))
 	assert.ErrorIs(t, err, ErrChunkTooLarge)
 }
 
@@ -155,8 +155,8 @@ func TestUploadSessionDataTooLarge(t *testing.T) {
 	}, 0)
 	require.NoError(t, err)
 
-	require.NoError(t, session.AddChunk(make([]byte, 60)))
-	err = session.AddChunk(make([]byte, 60))
+	require.NoError(t, session.AddChunk(ctx, make([]byte, 60)))
+	err = session.AddChunk(ctx, make([]byte, 60))
 	assert.ErrorIs(t, err, ErrDataTooLarge)
 }
 
@@ -177,7 +177,7 @@ func TestUploadSessionUpdate(t *testing.T) {
 	}, created.Version)
 	require.NoError(t, err)
 	for _, c := range chunks {
-		require.NoError(t, session.AddChunk(c))
+		require.NoError(t, session.AddChunk(ctx, c))
 	}
 
 	stored, err := session.Commit(ctx, digestOf(chunks...))
@@ -229,7 +229,7 @@ func TestUploadSessionUpdateAbortKeepsOldContent(t *testing.T) {
 		ID: created.ID, Type: model.EntryTypeText, Label: "note",
 	}, created.Version)
 	require.NoError(t, err)
-	require.NoError(t, session.AddChunk([]byte("abandoned-chunk")))
+	require.NoError(t, session.AddChunk(ctx, []byte("abandoned-chunk")))
 
 	session.Abort(ctx)
 
@@ -248,7 +248,7 @@ func TestUploadSessionCommitTwiceFails(t *testing.T) {
 		Type: model.EntryTypeBinary, Label: "once",
 	}, 0)
 	require.NoError(t, err)
-	require.NoError(t, session.AddChunk(chunks[0]))
+	require.NoError(t, session.AddChunk(ctx, chunks[0]))
 
 	_, err = session.Commit(ctx, digestOf(chunks...))
 	require.NoError(t, err)
@@ -280,9 +280,9 @@ func TestUploadSessionUpdateChunkSeqContinuesAfterExisting(t *testing.T) {
 		ID: created.ID, Type: model.EntryTypeBinary, Label: "file",
 	}, created.Version)
 	require.NoError(t, err)
-	require.NoError(t, session.AddChunk([]byte("new-0")))
-	require.NoError(t, session.AddChunk([]byte("new-1")))
-	require.NoError(t, session.AddChunk([]byte("new-2")))
+	require.NoError(t, session.AddChunk(ctx, []byte("new-0")))
+	require.NoError(t, session.AddChunk(ctx, []byte("new-1")))
+	require.NoError(t, session.AddChunk(ctx, []byte("new-2")))
 
 	stored, err := session.Commit(ctx, digestOf([]byte("new-0"), []byte("new-1"), []byte("new-2")))
 	require.NoError(t, err)

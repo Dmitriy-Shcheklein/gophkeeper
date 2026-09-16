@@ -219,7 +219,7 @@ func (h *EntryHandler) Upload(stream gophkeeperv1.EntryService_UploadServer) err
 			if digest != "" {
 				return status.Error(codes.InvalidArgument, "chunk after footer")
 			}
-			if err := session.AddChunk(req.GetChunk().GetData()); err != nil {
+			if err := session.AddChunk(stream.Context(), req.GetChunk().GetData()); err != nil {
 				return toStatusError(err)
 			}
 		case gophkeeperv1.UploadEntryRequest_Footer_case:
