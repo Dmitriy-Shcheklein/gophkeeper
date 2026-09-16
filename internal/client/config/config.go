@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dmitriy/gophkeeper/internal/client/cache"
 	"github.com/dmitriy/gophkeeper/internal/client/token"
 )
 
@@ -22,6 +23,8 @@ const (
 	EnvServer = "SERVER_ADDRESS"
 	// EnvTokenPath holds the path of the token file.
 	EnvTokenPath = "GOPHKEEPER_TOKEN_PATH"
+	// EnvCachePath holds the path of the offline cache file.
+	EnvCachePath = "GOPHKEEPER_CACHE_PATH"
 )
 
 // DefaultServer is the server address used when neither the
@@ -37,28 +40,41 @@ type Config struct {
 	Server string
 	// TokenPath is the file path the access token is persisted to.
 	TokenPath string
+	// CachePath is the file path of the encrypted offline cache
+	// (the entry snapshot read when the server is unreachable).
+	CachePath string
 }
 
 // Resolve builds the configuration from the given flag values
 // (empty when the flag was not set), applying the environment
 // variables and the built-in defaults: an empty server falls back to
 // $SERVER_ADDRESS and then DefaultServer; an empty token path falls
-// back to $GOPHKEEPER_TOKEN_PATH and then token.DefaultPath(). It
-// fails only when the default token path cannot be determined (no
-// home directory).
-func Resolve(serverFlag, tokenFlag string) (*Config, error) {
+// back to $GOPHKEEPER_TOKEN_PATH and then token.DefaultPath(); an
+// empty cache path falls back to $GOPHKEEPER_CACHE_PATH and then
+// cache.DefaultPath(). It fails only when one of the default paths
+// cannot be determined (no home directory).
+func Resolve(serverFlag, tokenFlag, cacheFlag string) (*Config, error) {
 	server := firstNonEmpty(serverFlag, os.Getenv(EnvServer), DefaultServer)
 
-	tokenPath := firstNonEmpty(tokenFlag, os.Getenv(EnvTokenPath))
-	if tokenPath == "" {
-		var err error
-		tokenPath, err = token.DefaultPath()
-		if err != nil {
-			return nil, fmt.Errorf("config: resolve default token path: %w", err)
-		}
+	tokenPath, err := resolvePath(tokenFlag, os.Getenv(EnvTokenPath), token.DefaultPath)
+	if err != nil {
+		return nil, fmt.Errorf("config: resolve default token path: %w", err)
+	}
+	cachePath, err := resolvePath(cacheFlag, os.Getenv(EnvCachePath), cache.DefaultPath)
+	if err != nil {
+		return nil, fmt.Errorf("config: resolve default cache path: %w", err)
 	}
 
-	return &Config{Server: server, TokenPath: tokenPath}, nil
+	return &Config{Server: server, TokenPath: tokenPath, CachePath: cachePath}, nil
+}
+
+// resolvePath applies the flag > environment > default fallback for
+// a file path setting; def produces the built-in default.
+func resolvePath(flagValue, envValue string, def func() (string, error)) (string, error) {
+	if path := firstNonEmpty(flagValue, envValue); path != "" {
+		return path, nil
+	}
+	return def()
 }
 
 // firstNonEmpty returns the first non-empty argument, or "" when all

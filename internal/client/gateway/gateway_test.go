@@ -261,8 +261,8 @@ var errorTranslationTests = []struct {
 	{
 		name:    "unavailable wrapped with code and message",
 		code:    codes.Unavailable,
-		want:    nil,
-		wantMsg: "gateway: rpc error: code = Unavailable desc = connection refused",
+		want:    ErrUnavailable,
+		wantMsg: "server is unreachable",
 	},
 }
 

@@ -10,8 +10,9 @@ import (
 func TestResolveDefaults(t *testing.T) {
 	t.Setenv(EnvServer, "")
 	t.Setenv(EnvTokenPath, "")
+	t.Setenv(EnvCachePath, "")
 
-	cfg, err := Resolve("", "")
+	cfg, err := Resolve("", "", "")
 	require.NoError(t, err)
 	require.Equal(t, DefaultServer, cfg.Server)
 
@@ -25,7 +26,7 @@ func TestResolveEnvFallback(t *testing.T) {
 	t.Setenv(EnvServer, "env-server:6000")
 	t.Setenv(EnvTokenPath, "/tmp/env-token")
 
-	cfg, err := Resolve("", "")
+	cfg, err := Resolve("", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "env-server:6000", cfg.Server)
 	require.Equal(t, "/tmp/env-token", cfg.TokenPath)
@@ -35,7 +36,7 @@ func TestResolveFlagOverridesEnv(t *testing.T) {
 	t.Setenv(EnvServer, "env-server:6000")
 	t.Setenv(EnvTokenPath, "/tmp/env-token")
 
-	cfg, err := Resolve("flag-server:7000", "/tmp/flag-token")
+	cfg, err := Resolve("flag-server:7000", "/tmp/flag-token", "")
 	require.NoError(t, err)
 	require.Equal(t, "flag-server:7000", cfg.Server)
 	require.Equal(t, "/tmp/flag-token", cfg.TokenPath)
@@ -45,7 +46,7 @@ func TestResolvePartialOverrides(t *testing.T) {
 	t.Setenv(EnvServer, "env-server:6000")
 	t.Setenv(EnvTokenPath, "")
 
-	cfg, err := Resolve("", "")
+	cfg, err := Resolve("", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "env-server:6000", cfg.Server)
 	require.Contains(t, cfg.TokenPath, ".gophkeeper")
@@ -56,7 +57,7 @@ func TestResolveDefaultTokenPathError(t *testing.T) {
 	// path cannot be resolved.
 	t.Setenv("HOME", "")
 
-	_, err := Resolve("", "")
+	_, err := Resolve("", "", "")
 	require.Error(t, err)
 	// The chain is config wrap -> token wrap -> the os.UserHomeDir
 	// failure ("$HOME is not defined"); assert the actual cause is

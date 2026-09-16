@@ -27,6 +27,12 @@ var (
 	// the user is not logged in or the token has expired; the service
 	// and CLI layers use it to prompt a login.
 	ErrUnauthenticated = errors.New("not logged in or session expired, please log in")
+	// ErrUnavailable means the server could not be reached at all:
+	// connection refused, DNS failure and the like (gRPC
+	// codes.Unavailable). The service layer uses it to decide on the
+	// offline-cache fallback; the CLI/TUI report it as "server
+	// unreachable".
+	ErrUnavailable = errors.New("server is unreachable")
 )
 
 // translateError maps a gRPC error to a client-friendly error:
@@ -52,6 +58,8 @@ func translateError(err error) error {
 		return ErrConflict
 	case codes.Unauthenticated:
 		return ErrUnauthenticated
+	case codes.Unavailable:
+		return ErrUnavailable
 	default:
 		// Wrap the original error (not just code+message) so callers
 		// can errors.As the *status.Status out of the chain.
