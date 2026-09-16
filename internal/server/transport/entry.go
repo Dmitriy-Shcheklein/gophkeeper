@@ -180,7 +180,7 @@ func (h *EntryHandler) Upload(stream gophkeeperv1.EntryService_UploadServer) err
 
 	first, err := stream.Recv()
 	if err != nil {
-		return status.Error(codes.InvalidArgument, "read upload header: "+err.Error())
+		return status.Error(codes.InvalidArgument, "invalid upload header")
 	}
 	header := first.GetHeader()
 	if header == nil {
@@ -212,7 +212,7 @@ func (h *EntryHandler) Upload(stream gophkeeperv1.EntryService_UploadServer) err
 			break
 		}
 		if err != nil {
-			return status.Error(codes.Internal, "read upload message: "+err.Error())
+			return status.Error(codes.Internal, "internal error")
 		}
 		switch req.WhichPayload() {
 		case gophkeeperv1.UploadEntryRequest_Chunk_case:
@@ -256,7 +256,7 @@ func (h *EntryHandler) DownloadEntryData(req *gophkeeperv1.DownloadEntryDataRequ
 	if err := stream.Send(gophkeeperv1.DownloadEntryDataResponse_builder{
 		Header: gophkeeperv1.DownloadEntryDataHeader_builder{Size: size}.Build(),
 	}.Build()); err != nil {
-		return status.Error(codes.Internal, "send download header: "+err.Error())
+		return status.Error(codes.Internal, "internal error")
 	}
 
 	if chunkCount == 0 {
@@ -288,7 +288,7 @@ func sendChunk(stream gophkeeperv1.EntryService_DownloadEntryDataServer, data []
 	if err := stream.Send(gophkeeperv1.DownloadEntryDataResponse_builder{
 		Chunk: gophkeeperv1.DataChunk_builder{Data: data}.Build(),
 	}.Build()); err != nil {
-		return status.Error(codes.Internal, "send download chunk: "+err.Error())
+		return status.Error(codes.Internal, "internal error")
 	}
 	return nil
 }

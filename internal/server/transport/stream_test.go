@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
@@ -18,18 +19,22 @@ import (
 // fakeUploadStream is an in-memory server stream for the Upload RPC.
 type fakeUploadStream struct {
 	gophkeeperv1.EntryService_UploadServer
-	msgs  []*gophkeeperv1.UploadEntryRequest
-	sent  int
-	reply *gophkeeperv1.UploadEntryResponse
+	msgs         []*gophkeeperv1.UploadEntryRequest
+	sent         int
+	reply        *gophkeeperv1.UploadEntryResponse
+	recvErr      error // returned by Recv on the recvErrAfter-th call
+	recvErrAfter int   // 1-based Recv number that fails; 0 = never fails
 }
 
 func (s *fakeUploadStream) Recv() (*gophkeeperv1.UploadEntryRequest, error) {
-	if s.sent >= len(s.msgs) {
+	s.sent++
+	if s.recvErr != nil && s.sent == s.recvErrAfter {
+		return nil, s.recvErr
+	}
+	if s.sent > len(s.msgs) {
 		return nil, io.EOF
 	}
-	m := s.msgs[s.sent]
-	s.sent++
-	return m, nil
+	return s.msgs[s.sent-1], nil
 }
 
 func (s *fakeUploadStream) SendAndClose(resp *gophkeeperv1.UploadEntryResponse) error {
@@ -73,10 +78,17 @@ func (s *recordingSession) Abort(_ context.Context) { s.aborted = true }
 // fakeDownloadStream collects the messages sent by the download handler.
 type fakeDownloadStream struct {
 	gophkeeperv1.EntryService_DownloadEntryDataServer
-	msgs []*gophkeeperv1.DownloadEntryDataResponse
+	msgs         []*gophkeeperv1.DownloadEntryDataResponse
+	sends        int
+	sendErr      error // returned by Send starting from sendErrAfter
+	sendErrAfter int   // 1-based send number that fails; 0 = never fails
 }
 
 func (s *fakeDownloadStream) Send(m *gophkeeperv1.DownloadEntryDataResponse) error {
+	s.sends++
+	if s.sendErr != nil && s.sends == s.sendErrAfter {
+		return s.sendErr
+	}
 	s.msgs = append(s.msgs, m)
 	return nil
 }
@@ -275,4 +287,81 @@ func TestDownloadEntryDataHandler_NotFound(t *testing.T) {
 	err := handler.DownloadEntryData((&gophkeeperv1.DownloadEntryDataRequest_builder{Id: "nope"}).Build(), stream)
 	assert.Equal(t, codes.NotFound, status.Code(err))
 	assert.Empty(t, stream.msgs)
+}
+
+// TestUploadHandler_RecvErrorIsGeneric verifies a Recv failure mid-upload
+// produces a generic internal error: the gRPC status must not carry the
+// underlying error text, which may include server internals.
+func TestUploadHandler_RecvErrorIsGeneric(t *testing.T) {
+	leaky := errors.New("tls: read from 10.0.0.5:443: connection reset by peer")
+	fake := &fakeEntryService{
+		beginUploadFn: func(_ context.Context, _ string, _ *model.Entry, _ int64) (service.UploadSession, error) {
+			return &recordingSession{}, nil
+		},
+	}
+	handler := NewEntryHandler(fake)
+
+	stream := &fakeUploadStream{
+		msgs: []*gophkeeperv1.UploadEntryRequest{
+			uploadHeader(entryProto(func(b *gophkeeperv1.Entry_builder) {
+				b.Type = gophkeeperv1.EntryType_ENTRY_TYPE_BINARY
+				b.Label = "movie"
+			})),
+		},
+		recvErr:      leaky,
+		recvErrAfter: 2, // fail on the second Recv: mid-upload, after the header
+	}
+	err := handler.Upload(stream)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Equal(t, "internal error", status.Convert(err).Message())
+	assert.NotContains(t, status.Convert(err).Message(), "10.0.0.5",
+		"the status message must not leak the underlying error details")
+}
+
+// TestDownloadHandler_SendErrorIsGeneric verifies a Send failure on the
+// download header produces a generic internal error without leaking the
+// underlying error text.
+func TestDownloadHandler_HeaderSendErrorIsGeneric(t *testing.T) {
+	leaky := errors.New("write tcp 10.0.0.5:443: broken pipe")
+	fake := &fakeEntryService{
+		dataInfoFn: func(_ context.Context, _, _ string) (int, int64, error) {
+			return 2, 10, nil
+		},
+	}
+	handler := NewEntryHandler(fake)
+
+	stream := &fakeDownloadStream{sendErr: leaky, sendErrAfter: 1}
+	err := handler.DownloadEntryData((&gophkeeperv1.DownloadEntryDataRequest_builder{Id: "entry-1"}).Build(), stream)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Equal(t, "internal error", status.Convert(err).Message())
+	assert.NotContains(t, status.Convert(err).Message(), "broken pipe",
+		"the status message must not leak the underlying error details")
+}
+
+// TestDownloadHandler_ChunkSendErrorIsGeneric verifies a Send failure
+// while streaming a payload chunk produces a generic internal error.
+func TestDownloadHandler_ChunkSendErrorIsGeneric(t *testing.T) {
+	leaky := errors.New("write tcp 10.0.0.5:443: broken pipe")
+	fake := &fakeEntryService{
+		dataInfoFn: func(_ context.Context, _, _ string) (int, int64, error) {
+			return 2, 10, nil
+		},
+		downloadChunkFn: func(_ context.Context, _, _ string, seq int) ([]byte, error) {
+			return []byte{byte(seq)}, nil
+		},
+	}
+	handler := NewEntryHandler(fake)
+
+	stream := &fakeDownloadStream{sendErr: leaky, sendErrAfter: 2}
+	err := handler.DownloadEntryData((&gophkeeperv1.DownloadEntryDataRequest_builder{Id: "entry-1"}).Build(), stream)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Equal(t, "internal error", status.Convert(err).Message())
+	assert.NotContains(t, status.Convert(err).Message(), "broken pipe",
+		"the status message must not leak the underlying error details")
 }
