@@ -13,7 +13,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -81,22 +80,14 @@ func (x EntryType) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use EntryType.Descriptor instead.
-func (EntryType) EnumDescriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_models_proto_rawDescGZIP(), []int{0}
-}
-
 // User represents a registered GophKeeper account.
 type User struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the unique server-assigned user identifier.
-	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// login is the unique login name used for authentication.
-	Login string `protobuf:"bytes,2,opt,name=login,proto3" json:"login,omitempty"`
-	// created_at is the account creation timestamp, Unix seconds (UTC).
-	CreatedAt     int64 `protobuf:"varint,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Id        string                 `protobuf:"bytes,1,opt,name=id,proto3"`
+	xxx_hidden_Login     string                 `protobuf:"bytes,2,opt,name=login,proto3"`
+	xxx_hidden_CreatedAt int64                  `protobuf:"varint,3,opt,name=created_at,json=createdAt,proto3"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *User) Reset() {
@@ -124,65 +115,76 @@ func (x *User) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use User.ProtoReflect.Descriptor instead.
-func (*User) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_models_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *User) GetId() string {
 	if x != nil {
-		return x.Id
+		return x.xxx_hidden_Id
 	}
 	return ""
 }
 
 func (x *User) GetLogin() string {
 	if x != nil {
-		return x.Login
+		return x.xxx_hidden_Login
 	}
 	return ""
 }
 
 func (x *User) GetCreatedAt() int64 {
 	if x != nil {
-		return x.CreatedAt
+		return x.xxx_hidden_CreatedAt
 	}
 	return 0
+}
+
+func (x *User) SetId(v string) {
+	x.xxx_hidden_Id = v
+}
+
+func (x *User) SetLogin(v string) {
+	x.xxx_hidden_Login = v
+}
+
+func (x *User) SetCreatedAt(v int64) {
+	x.xxx_hidden_CreatedAt = v
+}
+
+type User_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// id is the unique server-assigned user identifier.
+	Id string
+	// login is the unique login name used for authentication.
+	Login string
+	// created_at is the account creation timestamp, Unix seconds (UTC).
+	CreatedAt int64
+}
+
+func (b0 User_builder) Build() *User {
+	m0 := &User{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Id = b.Id
+	x.xxx_hidden_Login = b.Login
+	x.xxx_hidden_CreatedAt = b.CreatedAt
+	return m0
 }
 
 // Entry is a single piece of the user's private data stored on the server.
 // The actual payload is carried in the data field as bytes; its meaning
 // is determined by type.
 type Entry struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the unique server-assigned entry identifier.
-	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// type defines how the data field should be interpreted.
-	Type EntryType `protobuf:"varint,2,opt,name=type,proto3,enum=gophkeeper.v1.EntryType" json:"type,omitempty"`
-	// label is a user-visible name of the entry.
-	Label string `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
-	// metadata holds arbitrary text metadata supplied by the user.
-	Metadata string `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	// data is the entry payload:
-	// LOGIN_PASSWORD — serialized credential pair,
-	// TEXT — UTF-8 text,
-	// BINARY — raw bytes,
-	// CARD — serialized card data.
-	Data []byte `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
-	// version is incremented on every update and used for optimistic locking:
-	// update requests must carry the version they are based on.
-	Version int64 `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
-	// created_at is the entry creation timestamp, Unix seconds (UTC).
-	CreatedAt int64 `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// updated_at is the last modification timestamp, Unix seconds (UTC).
-	UpdatedAt int64 `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	// data_size is the server-reported size of the entry payload in bytes.
-	// It is populated even when data itself is omitted (see
-	// ListEntriesRequest.include_data and SyncRequest.include_data), so
-	// clients can show sizes and decide whether to download the content.
-	DataSize      int64 `protobuf:"varint,9,opt,name=data_size,json=dataSize,proto3" json:"data_size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Id        string                 `protobuf:"bytes,1,opt,name=id,proto3"`
+	xxx_hidden_Type      EntryType              `protobuf:"varint,2,opt,name=type,proto3,enum=gophkeeper.v1.EntryType"`
+	xxx_hidden_Label     string                 `protobuf:"bytes,3,opt,name=label,proto3"`
+	xxx_hidden_Metadata  string                 `protobuf:"bytes,4,opt,name=metadata,proto3"`
+	xxx_hidden_Data      []byte                 `protobuf:"bytes,5,opt,name=data,proto3"`
+	xxx_hidden_Version   int64                  `protobuf:"varint,6,opt,name=version,proto3"`
+	xxx_hidden_CreatedAt int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3"`
+	xxx_hidden_UpdatedAt int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3"`
+	xxx_hidden_DataSize  int64                  `protobuf:"varint,9,opt,name=data_size,json=dataSize,proto3"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Entry) Reset() {
@@ -210,72 +212,153 @@ func (x *Entry) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Entry.ProtoReflect.Descriptor instead.
-func (*Entry) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_models_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *Entry) GetId() string {
 	if x != nil {
-		return x.Id
+		return x.xxx_hidden_Id
 	}
 	return ""
 }
 
 func (x *Entry) GetType() EntryType {
 	if x != nil {
-		return x.Type
+		return x.xxx_hidden_Type
 	}
 	return EntryType_ENTRY_TYPE_UNSPECIFIED
 }
 
 func (x *Entry) GetLabel() string {
 	if x != nil {
-		return x.Label
+		return x.xxx_hidden_Label
 	}
 	return ""
 }
 
 func (x *Entry) GetMetadata() string {
 	if x != nil {
-		return x.Metadata
+		return x.xxx_hidden_Metadata
 	}
 	return ""
 }
 
 func (x *Entry) GetData() []byte {
 	if x != nil {
-		return x.Data
+		return x.xxx_hidden_Data
 	}
 	return nil
 }
 
 func (x *Entry) GetVersion() int64 {
 	if x != nil {
-		return x.Version
+		return x.xxx_hidden_Version
 	}
 	return 0
 }
 
 func (x *Entry) GetCreatedAt() int64 {
 	if x != nil {
-		return x.CreatedAt
+		return x.xxx_hidden_CreatedAt
 	}
 	return 0
 }
 
 func (x *Entry) GetUpdatedAt() int64 {
 	if x != nil {
-		return x.UpdatedAt
+		return x.xxx_hidden_UpdatedAt
 	}
 	return 0
 }
 
 func (x *Entry) GetDataSize() int64 {
 	if x != nil {
-		return x.DataSize
+		return x.xxx_hidden_DataSize
 	}
 	return 0
+}
+
+func (x *Entry) SetId(v string) {
+	x.xxx_hidden_Id = v
+}
+
+func (x *Entry) SetType(v EntryType) {
+	x.xxx_hidden_Type = v
+}
+
+func (x *Entry) SetLabel(v string) {
+	x.xxx_hidden_Label = v
+}
+
+func (x *Entry) SetMetadata(v string) {
+	x.xxx_hidden_Metadata = v
+}
+
+func (x *Entry) SetData(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Data = v
+}
+
+func (x *Entry) SetVersion(v int64) {
+	x.xxx_hidden_Version = v
+}
+
+func (x *Entry) SetCreatedAt(v int64) {
+	x.xxx_hidden_CreatedAt = v
+}
+
+func (x *Entry) SetUpdatedAt(v int64) {
+	x.xxx_hidden_UpdatedAt = v
+}
+
+func (x *Entry) SetDataSize(v int64) {
+	x.xxx_hidden_DataSize = v
+}
+
+type Entry_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// id is the unique server-assigned entry identifier.
+	Id string
+	// type defines how the data field should be interpreted.
+	Type EntryType
+	// label is a user-visible name of the entry.
+	Label string
+	// metadata holds arbitrary text metadata supplied by the user.
+	Metadata string
+	// data is the entry payload:
+	// LOGIN_PASSWORD — serialized credential pair,
+	// TEXT — UTF-8 text,
+	// BINARY — raw bytes,
+	// CARD — serialized card data.
+	Data []byte
+	// version is incremented on every update and used for optimistic locking:
+	// update requests must carry the version they are based on.
+	Version int64
+	// created_at is the entry creation timestamp, Unix seconds (UTC).
+	CreatedAt int64
+	// updated_at is the last modification timestamp, Unix seconds (UTC).
+	UpdatedAt int64
+	// data_size is the server-reported size of the entry payload in bytes.
+	// It is populated even when data itself is omitted (see
+	// ListEntriesRequest.include_data and SyncRequest.include_data), so
+	// clients can show sizes and decide whether to download the content.
+	DataSize int64
+}
+
+func (b0 Entry_builder) Build() *Entry {
+	m0 := &Entry{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Id = b.Id
+	x.xxx_hidden_Type = b.Type
+	x.xxx_hidden_Label = b.Label
+	x.xxx_hidden_Metadata = b.Metadata
+	x.xxx_hidden_Data = b.Data
+	x.xxx_hidden_Version = b.Version
+	x.xxx_hidden_CreatedAt = b.CreatedAt
+	x.xxx_hidden_UpdatedAt = b.UpdatedAt
+	x.xxx_hidden_DataSize = b.DataSize
+	return m0
 }
 
 var File_gophkeeper_v1_models_proto protoreflect.FileDescriptor
@@ -306,18 +389,6 @@ const file_gophkeeper_v1_models_proto_rawDesc = "" +
 	"\x0fENTRY_TYPE_TEXT\x10\x02\x12\x15\n" +
 	"\x11ENTRY_TYPE_BINARY\x10\x03\x12\x13\n" +
 	"\x0fENTRY_TYPE_CARD\x10\x04BOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
-
-var (
-	file_gophkeeper_v1_models_proto_rawDescOnce sync.Once
-	file_gophkeeper_v1_models_proto_rawDescData []byte
-)
-
-func file_gophkeeper_v1_models_proto_rawDescGZIP() []byte {
-	file_gophkeeper_v1_models_proto_rawDescOnce.Do(func() {
-		file_gophkeeper_v1_models_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_gophkeeper_v1_models_proto_rawDesc), len(file_gophkeeper_v1_models_proto_rawDesc)))
-	})
-	return file_gophkeeper_v1_models_proto_rawDescData
-}
 
 var file_gophkeeper_v1_models_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_gophkeeper_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 2)

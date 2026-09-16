@@ -49,11 +49,11 @@ func userToProto(u *model.User) *gophkeeperv1.User {
 	if u == nil {
 		return nil
 	}
-	return &gophkeeperv1.User{
+	return gophkeeperv1.User_builder{
 		Id:        u.ID,
 		Login:     u.Login,
 		CreatedAt: u.CreatedAt.Unix(),
-	}
+	}.Build()
 }
 
 // entryToProto converts a domain entry to its protobuf representation.
@@ -62,7 +62,7 @@ func entryToProto(e *model.Entry) *gophkeeperv1.Entry {
 	if e == nil {
 		return nil
 	}
-	return &gophkeeperv1.Entry{
+	return gophkeeperv1.Entry_builder{
 		Id:        e.ID,
 		Type:      entryTypeToProto(e.Type),
 		Label:     e.Label,
@@ -72,7 +72,7 @@ func entryToProto(e *model.Entry) *gophkeeperv1.Entry {
 		Version:   e.Version,
 		CreatedAt: e.CreatedAt.Unix(),
 		UpdatedAt: e.UpdatedAt.Unix(),
-	}
+	}.Build()
 }
 
 // dataSize reports the payload size of the entry: the inline data

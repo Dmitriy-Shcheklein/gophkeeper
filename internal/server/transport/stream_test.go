@@ -83,6 +83,32 @@ func (s *fakeDownloadStream) Send(m *gophkeeperv1.DownloadEntryDataResponse) err
 
 func (s *fakeDownloadStream) Context() context.Context { return claimsContext("user-1") }
 
+// uploadHeader/uploadChunk/uploadFooter build the upload stream
+// messages (opaque API: oneof cases are set via the builder).
+func uploadHeader(e *gophkeeperv1.Entry) *gophkeeperv1.UploadEntryRequest {
+	return (&gophkeeperv1.UploadEntryRequest_builder{
+		Header: (&gophkeeperv1.UploadEntryHeader_builder{Entry: e}).Build(),
+	}).Build()
+}
+
+func uploadChunk(data []byte) *gophkeeperv1.UploadEntryRequest {
+	return (&gophkeeperv1.UploadEntryRequest_builder{
+		Chunk: (&gophkeeperv1.UploadEntryChunk_builder{Data: data}).Build(),
+	}).Build()
+}
+
+func uploadFooter(sha string) *gophkeeperv1.UploadEntryRequest {
+	return (&gophkeeperv1.UploadEntryRequest_builder{
+		Footer: (&gophkeeperv1.UploadEntryFooter_builder{Sha256: sha}).Build(),
+	}).Build()
+}
+
+func entryProto(mutate func(*gophkeeperv1.Entry_builder)) *gophkeeperv1.Entry {
+	b := &gophkeeperv1.Entry_builder{}
+	mutate(b)
+	return b.Build()
+}
+
 func TestUploadHandler_HappyPath(t *testing.T) {
 	result := sampleEntry()
 	session := &recordingSession{result: result}
@@ -97,12 +123,13 @@ func TestUploadHandler_HappyPath(t *testing.T) {
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeUploadStream{msgs: []*gophkeeperv1.UploadEntryRequest{
-		{Payload: &gophkeeperv1.UploadEntryRequest_Header{Header: &gophkeeperv1.UploadEntryHeader{
-			Entry: &gophkeeperv1.Entry{Type: gophkeeperv1.EntryType_ENTRY_TYPE_BINARY, Label: "movie"},
-		}}},
-		{Payload: &gophkeeperv1.UploadEntryRequest_Chunk{Chunk: &gophkeeperv1.UploadEntryChunk{Data: []byte("part1-")}}},
-		{Payload: &gophkeeperv1.UploadEntryRequest_Chunk{Chunk: &gophkeeperv1.UploadEntryChunk{Data: []byte("part2")}}},
-		{Payload: &gophkeeperv1.UploadEntryRequest_Footer{Footer: &gophkeeperv1.UploadEntryFooter{Sha256: "abc"}}},
+		uploadHeader(entryProto(func(b *gophkeeperv1.Entry_builder) {
+			b.Type = gophkeeperv1.EntryType_ENTRY_TYPE_BINARY
+			b.Label = "movie"
+		})),
+		uploadChunk([]byte("part1-")),
+		uploadChunk([]byte("part2")),
+		uploadFooter("abc"),
 	}}
 
 	err := handler.Upload(stream)
@@ -130,10 +157,11 @@ func TestUploadHandler_AbortsOnError(t *testing.T) {
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeUploadStream{msgs: []*gophkeeperv1.UploadEntryRequest{
-		{Payload: &gophkeeperv1.UploadEntryRequest_Header{Header: &gophkeeperv1.UploadEntryHeader{
-			Entry: &gophkeeperv1.Entry{Type: gophkeeperv1.EntryType_ENTRY_TYPE_BINARY, Label: "x"},
-		}}},
-		{Payload: &gophkeeperv1.UploadEntryRequest_Footer{Footer: &gophkeeperv1.UploadEntryFooter{Sha256: "bad"}}},
+		uploadHeader(entryProto(func(b *gophkeeperv1.Entry_builder) {
+			b.Type = gophkeeperv1.EntryType_ENTRY_TYPE_BINARY
+			b.Label = "x"
+		})),
+		uploadFooter("bad"),
 	}}
 
 	err := handler.Upload(stream)
@@ -146,7 +174,7 @@ func TestUploadHandler_MissingHeader(t *testing.T) {
 	handler := NewEntryHandler(&fakeEntryService{})
 
 	stream := &fakeUploadStream{msgs: []*gophkeeperv1.UploadEntryRequest{
-		{Payload: &gophkeeperv1.UploadEntryRequest_Chunk{Chunk: &gophkeeperv1.UploadEntryChunk{Data: []byte("x")}}},
+		uploadChunk([]byte("x")),
 	}}
 	err := handler.Upload(stream)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -163,10 +191,11 @@ func TestUploadHandler_MissingFooter(t *testing.T) {
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeUploadStream{msgs: []*gophkeeperv1.UploadEntryRequest{
-		{Payload: &gophkeeperv1.UploadEntryRequest_Header{Header: &gophkeeperv1.UploadEntryHeader{
-			Entry: &gophkeeperv1.Entry{Type: gophkeeperv1.EntryType_ENTRY_TYPE_BINARY, Label: "x"},
-		}}},
-		{Payload: &gophkeeperv1.UploadEntryRequest_Chunk{Chunk: &gophkeeperv1.UploadEntryChunk{Data: []byte("x")}}},
+		uploadHeader(entryProto(func(b *gophkeeperv1.Entry_builder) {
+			b.Type = gophkeeperv1.EntryType_ENTRY_TYPE_BINARY
+			b.Label = "x"
+		})),
+		uploadChunk([]byte("x")),
 	}}
 
 	err := handler.Upload(stream)
@@ -183,9 +212,9 @@ func TestUploadHandler_BeginUploadError(t *testing.T) {
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeUploadStream{msgs: []*gophkeeperv1.UploadEntryRequest{
-		{Payload: &gophkeeperv1.UploadEntryRequest_Header{Header: &gophkeeperv1.UploadEntryHeader{
-			Entry: &gophkeeperv1.Entry{Type: gophkeeperv1.EntryType_ENTRY_TYPE_BINARY},
-		}}},
+		uploadHeader(entryProto(func(b *gophkeeperv1.Entry_builder) {
+			b.Type = gophkeeperv1.EntryType_ENTRY_TYPE_BINARY
+		})),
 	}}
 	err := handler.Upload(stream)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -193,18 +222,18 @@ func TestUploadHandler_BeginUploadError(t *testing.T) {
 
 func TestDownloadEntryDataHandler_Chunked(t *testing.T) {
 	fake := &fakeEntryService{
-		dataInfoFn: func(_ context.Context, _ string, entryID string) (int, int64, error) {
+		dataInfoFn: func(_ context.Context, _, entryID string) (int, int64, error) {
 			assert.Equal(t, "entry-1", entryID)
 			return 2, 10, nil
 		},
-		downloadChunkFn: func(_ context.Context, _ string, _ string, seq int) ([]byte, error) {
+		downloadChunkFn: func(_ context.Context, _, _ string, seq int) ([]byte, error) {
 			return []byte{byte(seq)}, nil
 		},
 	}
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeDownloadStream{}
-	err := handler.DownloadEntryData(&gophkeeperv1.DownloadEntryDataRequest{Id: "entry-1"}, stream)
+	err := handler.DownloadEntryData((&gophkeeperv1.DownloadEntryDataRequest_builder{Id: "entry-1"}).Build(), stream)
 	require.NoError(t, err)
 
 	require.Len(t, stream.msgs, 3)
@@ -226,7 +255,7 @@ func TestDownloadEntryDataHandler_Inline(t *testing.T) {
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeDownloadStream{}
-	err := handler.DownloadEntryData(&gophkeeperv1.DownloadEntryDataRequest{Id: "entry-1"}, stream)
+	err := handler.DownloadEntryData((&gophkeeperv1.DownloadEntryDataRequest_builder{Id: "entry-1"}).Build(), stream)
 	require.NoError(t, err)
 
 	require.Len(t, stream.msgs, 2)
@@ -243,7 +272,7 @@ func TestDownloadEntryDataHandler_NotFound(t *testing.T) {
 	handler := NewEntryHandler(fake)
 
 	stream := &fakeDownloadStream{}
-	err := handler.DownloadEntryData(&gophkeeperv1.DownloadEntryDataRequest{Id: "nope"}, stream)
+	err := handler.DownloadEntryData((&gophkeeperv1.DownloadEntryDataRequest_builder{Id: "nope"}).Build(), stream)
 	assert.Equal(t, codes.NotFound, status.Code(err))
 	assert.Empty(t, stream.msgs)
 }

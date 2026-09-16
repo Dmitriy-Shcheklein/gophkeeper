@@ -30,10 +30,10 @@ var _ AuthGateway = (*Gateway)(nil)
 // reported to the caller: silently losing the token would leave the
 // user logged out on the next invocation with no explanation.
 func (g *Gateway) Register(ctx context.Context, login, password string) (string, error) {
-	resp, err := g.auth.Register(ctx, &v1.RegisterRequest{
+	resp, err := g.auth.Register(ctx, v1.RegisterRequest_builder{
 		Login:    login,
 		Password: password,
-	})
+	}.Build())
 	if err != nil {
 		return "", translateError(err)
 	}
@@ -43,10 +43,10 @@ func (g *Gateway) Register(ctx context.Context, login, password string) (string,
 // Login authenticates an existing account. See Register for the
 // token handling contract.
 func (g *Gateway) Login(ctx context.Context, login, password string) (string, error) {
-	resp, err := g.auth.Login(ctx, &v1.LoginRequest{
+	resp, err := g.auth.Login(ctx, v1.LoginRequest_builder{
 		Login:    login,
 		Password: password,
-	})
+	}.Build())
 	if err != nil {
 		return "", translateError(err)
 	}

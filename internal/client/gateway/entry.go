@@ -73,9 +73,9 @@ var _ EntryGateway = (*Gateway)(nil)
 // Create stores a new entry; id, version and timestamps of the
 // argument are ignored by the server.
 func (g *Gateway) Create(ctx context.Context, entry *model.Entry) (*model.Entry, error) {
-	resp, err := g.entries.Create(ctx, &v1.CreateEntryRequest{
+	resp, err := g.entries.Create(ctx, v1.CreateEntryRequest_builder{
 		Entry: entryToProto(entry),
-	})
+	}.Build())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -84,7 +84,7 @@ func (g *Gateway) Create(ctx context.Context, entry *model.Entry) (*model.Entry,
 
 // Get returns a single entry by id.
 func (g *Gateway) Get(ctx context.Context, id string) (*model.Entry, error) {
-	resp, err := g.entries.Get(ctx, &v1.GetEntryRequest{Id: id})
+	resp, err := g.entries.Get(ctx, v1.GetEntryRequest_builder{Id: id}.Build())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -95,7 +95,7 @@ func (g *Gateway) Get(ctx context.Context, id string) (*model.Entry, error) {
 // carried only when includeData is set; otherwise entries come with
 // DataSize only.
 func (g *Gateway) List(ctx context.Context, includeData bool) ([]*model.Entry, error) {
-	resp, err := g.entries.List(ctx, &v1.ListEntriesRequest{IncludeData: includeData})
+	resp, err := g.entries.List(ctx, v1.ListEntriesRequest_builder{IncludeData: includeData}.Build())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -106,9 +106,9 @@ func (g *Gateway) List(ctx context.Context, includeData bool) ([]*model.Entry, e
 // passed to the server for optimistic locking; on a stale version the
 // server fails the call and ErrConflict is returned.
 func (g *Gateway) Update(ctx context.Context, entry *model.Entry) (*model.Entry, error) {
-	resp, err := g.entries.Update(ctx, &v1.UpdateEntryRequest{
+	resp, err := g.entries.Update(ctx, v1.UpdateEntryRequest_builder{
 		Entry: entryToProto(entry),
-	})
+	}.Build())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -117,7 +117,7 @@ func (g *Gateway) Update(ctx context.Context, entry *model.Entry) (*model.Entry,
 
 // Delete removes an entry by id.
 func (g *Gateway) Delete(ctx context.Context, id string) error {
-	_, err := g.entries.Delete(ctx, &v1.DeleteEntryRequest{Id: id})
+	_, err := g.entries.Delete(ctx, v1.DeleteEntryRequest_builder{Id: id}.Build())
 	if err != nil {
 		return translateError(err)
 	}
@@ -127,7 +127,7 @@ func (g *Gateway) Delete(ctx context.Context, id string) error {
 // Sync returns the full current set of the user's entries. Payloads
 // are carried only when includeData is set.
 func (g *Gateway) Sync(ctx context.Context, includeData bool) ([]*model.Entry, error) {
-	resp, err := g.entries.Sync(ctx, &v1.SyncRequest{IncludeData: includeData})
+	resp, err := g.entries.Sync(ctx, v1.SyncRequest_builder{IncludeData: includeData}.Build())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -145,7 +145,7 @@ func (g *Gateway) Upload(ctx context.Context) (UploadStream, error) {
 
 // DownloadEntryData streams the payload of a single entry.
 func (g *Gateway) DownloadEntryData(ctx context.Context, id string) (DownloadStream, error) {
-	s, err := g.entries.DownloadEntryData(ctx, &v1.DownloadEntryDataRequest{Id: id})
+	s, err := g.entries.DownloadEntryData(ctx, v1.DownloadEntryDataRequest_builder{Id: id}.Build())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -164,12 +164,12 @@ func (u *uploadStream) SendHeader(entry *model.Entry, expectedVersion int64) err
 		return errors.New("gateway: upload header already sent")
 	}
 	u.header = true
-	return u.stream.Send(&v1.UploadEntryRequest{Payload: &v1.UploadEntryRequest_Header{
-		Header: &v1.UploadEntryHeader{
+	return u.stream.Send(v1.UploadEntryRequest_builder{
+		Header: v1.UploadEntryHeader_builder{
 			Entry:           entryToProto(entry),
 			ExpectedVersion: expectedVersion,
-		},
-	}})
+		}.Build(),
+	}.Build())
 }
 
 // SendChunk sends one payload chunk.
@@ -177,9 +177,9 @@ func (u *uploadStream) SendChunk(data []byte) error {
 	if !u.header {
 		return errors.New("gateway: upload header not sent")
 	}
-	return u.stream.Send(&v1.UploadEntryRequest{Payload: &v1.UploadEntryRequest_Chunk{
-		Chunk: &v1.UploadEntryChunk{Data: data},
-	}})
+	return u.stream.Send(v1.UploadEntryRequest_builder{
+		Chunk: v1.UploadEntryChunk_builder{Data: data}.Build(),
+	}.Build())
 }
 
 // CloseAndCommit closes the stream with the footer and returns the
@@ -188,9 +188,9 @@ func (u *uploadStream) CloseAndCommit(sha256hex string) (*model.Entry, error) {
 	if !u.header {
 		return nil, errors.New("gateway: upload header not sent")
 	}
-	if err := u.stream.Send(&v1.UploadEntryRequest{Payload: &v1.UploadEntryRequest_Footer{
-		Footer: &v1.UploadEntryFooter{Sha256: sha256hex},
-	}}); err != nil {
+	if err := u.stream.Send(v1.UploadEntryRequest_builder{
+		Footer: v1.UploadEntryFooter_builder{Sha256: sha256hex}.Build(),
+	}.Build()); err != nil {
 		return nil, translateError(err)
 	}
 	resp, err := u.stream.CloseAndRecv()

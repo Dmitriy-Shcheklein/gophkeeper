@@ -94,7 +94,7 @@ func (f *fakeEntryServer) Sync(ctx context.Context, _ *v1.SyncRequest) (*v1.Sync
 	if f.syncErr != nil {
 		return nil, f.syncErr
 	}
-	return &v1.SyncResponse{Entries: f.listResp.GetEntries()}, nil
+	return (&v1.SyncResponse_builder{Entries: f.listResp.GetEntries()}).Build(), nil
 }
 
 func (f *fakeEntryServer) sawAuthz() string {
@@ -106,7 +106,7 @@ func (f *fakeEntryServer) sawAuthz() string {
 // cannedEntry is a fully-populated proto entry with deterministic
 // field values, used to verify conversion completeness.
 func cannedProtoEntry() *v1.Entry {
-	return &v1.Entry{
+	return (&v1.Entry_builder{
 		Id:        "entry-42",
 		Type:      v1.EntryType_ENTRY_TYPE_CARD,
 		Label:     "Visa",
@@ -115,11 +115,11 @@ func cannedProtoEntry() *v1.Entry {
 		Version:   7,
 		CreatedAt: 1700000000,
 		UpdatedAt: 1700001234,
-	}
+	}).Build()
 }
 
 func TestCreate(t *testing.T) {
-	fake := &fakeEntryServer{createResp: &v1.CreateEntryResponse{Entry: cannedProtoEntry()}}
+	fake := &fakeEntryServer{createResp: (&v1.CreateEntryResponse_builder{Entry: cannedProtoEntry()}).Build()}
 	g := newBufnetGateway(t, func(s *grpc.Server) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})
@@ -155,7 +155,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	fake := &fakeEntryServer{getResp: &v1.GetEntryResponse{Entry: cannedProtoEntry()}}
+	fake := &fakeEntryServer{getResp: (&v1.GetEntryResponse_builder{Entry: cannedProtoEntry()}).Build()}
 	g := newBufnetGateway(t, func(s *grpc.Server) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})
@@ -173,10 +173,10 @@ func TestGet(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	fake := &fakeEntryServer{listResp: &v1.ListEntriesResponse{Entries: []*v1.Entry{
+	fake := &fakeEntryServer{listResp: (&v1.ListEntriesResponse_builder{Entries: []*v1.Entry{
 		cannedProtoEntry(),
-		{Id: "entry-43", Type: v1.EntryType_ENTRY_TYPE_TEXT, Label: "Note", CreatedAt: 1, UpdatedAt: 2},
-	}}}
+		(&v1.Entry_builder{Id: "entry-43", Type: v1.EntryType_ENTRY_TYPE_TEXT, Label: "Note", CreatedAt: 1, UpdatedAt: 2}).Build(),
+	}}).Build()}
 	g := newBufnetGateway(t, func(s *grpc.Server) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})
@@ -212,7 +212,7 @@ func TestListEmpty(t *testing.T) {
 }
 
 func TestUpdatePassesVersion(t *testing.T) {
-	fake := &fakeEntryServer{updateResp: &v1.UpdateEntryResponse{Entry: cannedProtoEntry()}}
+	fake := &fakeEntryServer{updateResp: (&v1.UpdateEntryResponse_builder{Entry: cannedProtoEntry()}).Build()}
 	g := newBufnetGateway(t, func(s *grpc.Server) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})
@@ -255,9 +255,9 @@ func TestDelete(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
-	fake := &fakeEntryServer{listResp: &v1.ListEntriesResponse{Entries: []*v1.Entry{
+	fake := &fakeEntryServer{listResp: (&v1.ListEntriesResponse_builder{Entries: []*v1.Entry{
 		cannedProtoEntry(),
-	}}}
+	}}).Build()}
 	g := newBufnetGateway(t, func(s *grpc.Server) {
 		v1.RegisterEntryServiceServer(s, fake)
 	})

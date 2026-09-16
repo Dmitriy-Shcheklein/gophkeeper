@@ -96,7 +96,7 @@ func (f *fakeAuthService) Register(ctx context.Context, req *v1.RegisterRequest)
 	if f.registerErr != nil {
 		return nil, f.registerErr
 	}
-	return &v1.RegisterResponse{AccessToken: f.registerToken}, nil
+	return (&v1.RegisterResponse_builder{AccessToken: f.registerToken}).Build(), nil
 }
 
 func (f *fakeAuthService) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
@@ -107,7 +107,7 @@ func (f *fakeAuthService) Login(ctx context.Context, req *v1.LoginRequest) (*v1.
 	if f.loginErr != nil {
 		return nil, f.loginErr
 	}
-	return &v1.LoginResponse{AccessToken: f.loginToken}, nil
+	return (&v1.LoginResponse_builder{AccessToken: f.loginToken}).Build(), nil
 }
 
 func (f *fakeAuthService) sawAuthz() string {

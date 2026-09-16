@@ -24,7 +24,7 @@ import (
 
 // sampleEntry returns a fully populated Entry covering every field.
 func sampleEntry() *gophkeeperv1.Entry {
-	return &gophkeeperv1.Entry{
+	return (&gophkeeperv1.Entry_builder{
 		Id:        "entry-1",
 		Type:      gophkeeperv1.EntryType_ENTRY_TYPE_CARD,
 		Label:     "Bank card",
@@ -33,11 +33,11 @@ func sampleEntry() *gophkeeperv1.Entry {
 		Version:   7,
 		CreatedAt: 1000,
 		UpdatedAt: 2000,
-	}
+	}).Build()
 }
 
 func sampleUser() *gophkeeperv1.User {
-	return &gophkeeperv1.User{Id: "user-1", Login: "alice", CreatedAt: 42}
+	return (&gophkeeperv1.User_builder{Id: "user-1", Login: "alice", CreatedAt: 42}).Build()
 }
 
 // TestMessageRoundTrip marshals and unmarshals every request/response
@@ -52,22 +52,22 @@ func TestMessageRoundTrip(t *testing.T) {
 		proto.Message
 		String() string
 	}{
-		&gophkeeperv1.RegisterRequest{Login: "alice", Password: "secret"},
-		&gophkeeperv1.RegisterResponse{User: sampleUser(), AccessToken: "tok"},
-		&gophkeeperv1.LoginRequest{Login: "alice", Password: "secret"},
-		&gophkeeperv1.LoginResponse{User: sampleUser(), AccessToken: "tok"},
-		&gophkeeperv1.CreateEntryRequest{Entry: entry},
-		&gophkeeperv1.CreateEntryResponse{Entry: entry},
-		&gophkeeperv1.GetEntryRequest{Id: entry.GetId()},
-		&gophkeeperv1.GetEntryResponse{Entry: entry},
+		(&gophkeeperv1.RegisterRequest_builder{Login: "alice", Password: "secret"}).Build(),
+		(&gophkeeperv1.RegisterResponse_builder{User: sampleUser(), AccessToken: "tok"}).Build(),
+		(&gophkeeperv1.LoginRequest_builder{Login: "alice", Password: "secret"}).Build(),
+		(&gophkeeperv1.LoginResponse_builder{User: sampleUser(), AccessToken: "tok"}).Build(),
+		(&gophkeeperv1.CreateEntryRequest_builder{Entry: entry}).Build(),
+		(&gophkeeperv1.CreateEntryResponse_builder{Entry: entry}).Build(),
+		(&gophkeeperv1.GetEntryRequest_builder{Id: entry.GetId()}).Build(),
+		(&gophkeeperv1.GetEntryResponse_builder{Entry: entry}).Build(),
 		&gophkeeperv1.ListEntriesRequest{},
-		&gophkeeperv1.ListEntriesResponse{Entries: []*gophkeeperv1.Entry{entry}},
-		&gophkeeperv1.UpdateEntryRequest{Entry: entry},
-		&gophkeeperv1.UpdateEntryResponse{Entry: entry},
-		&gophkeeperv1.DeleteEntryRequest{Id: entry.GetId()},
+		(&gophkeeperv1.ListEntriesResponse_builder{Entries: []*gophkeeperv1.Entry{entry}}).Build(),
+		(&gophkeeperv1.UpdateEntryRequest_builder{Entry: entry}).Build(),
+		(&gophkeeperv1.UpdateEntryResponse_builder{Entry: entry}).Build(),
+		(&gophkeeperv1.DeleteEntryRequest_builder{Id: entry.GetId()}).Build(),
 		&gophkeeperv1.DeleteEntryResponse{},
 		&gophkeeperv1.SyncRequest{},
-		&gophkeeperv1.SyncResponse{Entries: []*gophkeeperv1.Entry{entry}},
+		(&gophkeeperv1.SyncResponse_builder{Entries: []*gophkeeperv1.Entry{entry}}).Build(),
 	}
 
 	for _, m := range msgs {
@@ -149,19 +149,19 @@ type stubEntryService struct {
 }
 
 func (s *stubEntryService) Create(context.Context, *gophkeeperv1.CreateEntryRequest) (*gophkeeperv1.CreateEntryResponse, error) {
-	return &gophkeeperv1.CreateEntryResponse{Entry: s.entry}, nil
+	return (&gophkeeperv1.CreateEntryResponse_builder{Entry: s.entry}).Build(), nil
 }
 
 func (s *stubEntryService) Get(context.Context, *gophkeeperv1.GetEntryRequest) (*gophkeeperv1.GetEntryResponse, error) {
-	return &gophkeeperv1.GetEntryResponse{Entry: s.entry}, nil
+	return (&gophkeeperv1.GetEntryResponse_builder{Entry: s.entry}).Build(), nil
 }
 
 func (s *stubEntryService) List(context.Context, *gophkeeperv1.ListEntriesRequest) (*gophkeeperv1.ListEntriesResponse, error) {
-	return &gophkeeperv1.ListEntriesResponse{Entries: []*gophkeeperv1.Entry{s.entry}}, nil
+	return (&gophkeeperv1.ListEntriesResponse_builder{Entries: []*gophkeeperv1.Entry{s.entry}}).Build(), nil
 }
 
 func (s *stubEntryService) Update(context.Context, *gophkeeperv1.UpdateEntryRequest) (*gophkeeperv1.UpdateEntryResponse, error) {
-	return &gophkeeperv1.UpdateEntryResponse{Entry: s.entry}, nil
+	return (&gophkeeperv1.UpdateEntryResponse_builder{Entry: s.entry}).Build(), nil
 }
 
 func (s *stubEntryService) Delete(context.Context, *gophkeeperv1.DeleteEntryRequest) (*gophkeeperv1.DeleteEntryResponse, error) {
@@ -169,7 +169,7 @@ func (s *stubEntryService) Delete(context.Context, *gophkeeperv1.DeleteEntryRequ
 }
 
 func (s *stubEntryService) Sync(context.Context, *gophkeeperv1.SyncRequest) (*gophkeeperv1.SyncResponse, error) {
-	return &gophkeeperv1.SyncResponse{Entries: []*gophkeeperv1.Entry{s.entry}}, nil
+	return (&gophkeeperv1.SyncResponse_builder{Entries: []*gophkeeperv1.Entry{s.entry}}).Build(), nil
 }
 
 type stubAuthService struct {
@@ -177,11 +177,11 @@ type stubAuthService struct {
 }
 
 func (stubAuthService) Register(context.Context, *gophkeeperv1.RegisterRequest) (*gophkeeperv1.RegisterResponse, error) {
-	return &gophkeeperv1.RegisterResponse{User: sampleUser(), AccessToken: "tok"}, nil
+	return (&gophkeeperv1.RegisterResponse_builder{User: sampleUser(), AccessToken: "tok"}).Build(), nil
 }
 
 func (stubAuthService) Login(context.Context, *gophkeeperv1.LoginRequest) (*gophkeeperv1.LoginResponse, error) {
-	return &gophkeeperv1.LoginResponse{User: sampleUser(), AccessToken: "tok"}, nil
+	return (&gophkeeperv1.LoginResponse_builder{User: sampleUser(), AccessToken: "tok"}).Build(), nil
 }
 
 // dialBufconn starts an in-process gRPC server serving the stub
@@ -219,14 +219,14 @@ func TestRPCOverWire(t *testing.T) {
 	ctx := context.Background()
 
 	auth := gophkeeperv1.NewAuthServiceClient(conn)
-	reg, err := auth.Register(ctx, &gophkeeperv1.RegisterRequest{Login: "alice", Password: "secret"})
+	reg, err := auth.Register(ctx, (&gophkeeperv1.RegisterRequest_builder{Login: "alice", Password: "secret"}).Build())
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if reg.GetAccessToken() != "tok" || reg.GetUser().GetLogin() != "alice" {
 		t.Errorf("Register response = %+v", reg)
 	}
-	lg, err := auth.Login(ctx, &gophkeeperv1.LoginRequest{Login: "alice", Password: "secret"})
+	lg, err := auth.Login(ctx, (&gophkeeperv1.LoginRequest_builder{Login: "alice", Password: "secret"}).Build())
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -236,10 +236,10 @@ func TestRPCOverWire(t *testing.T) {
 
 	entries := gophkeeperv1.NewEntryServiceClient(conn)
 	entry := sampleEntry()
-	if _, err := entries.Create(ctx, &gophkeeperv1.CreateEntryRequest{Entry: entry}); err != nil {
+	if _, err := entries.Create(ctx, (&gophkeeperv1.CreateEntryRequest_builder{Entry: entry}).Build()); err != nil {
 		t.Errorf("Create: %v", err)
 	}
-	got, err := entries.Get(ctx, &gophkeeperv1.GetEntryRequest{Id: entry.GetId()})
+	got, err := entries.Get(ctx, (&gophkeeperv1.GetEntryRequest_builder{Id: entry.GetId()}).Build())
 	if err != nil {
 		t.Errorf("Get: %v", err)
 	} else if !proto.Equal(got.GetEntry(), entry) {
@@ -248,10 +248,10 @@ func TestRPCOverWire(t *testing.T) {
 	if _, err := entries.List(ctx, &gophkeeperv1.ListEntriesRequest{}); err != nil {
 		t.Errorf("List: %v", err)
 	}
-	if _, err := entries.Update(ctx, &gophkeeperv1.UpdateEntryRequest{Entry: entry}); err != nil {
+	if _, err := entries.Update(ctx, (&gophkeeperv1.UpdateEntryRequest_builder{Entry: entry}).Build()); err != nil {
 		t.Errorf("Update: %v", err)
 	}
-	if _, err := entries.Delete(ctx, &gophkeeperv1.DeleteEntryRequest{Id: entry.GetId()}); err != nil {
+	if _, err := entries.Delete(ctx, (&gophkeeperv1.DeleteEntryRequest_builder{Id: entry.GetId()}).Build()); err != nil {
 		t.Errorf("Delete: %v", err)
 	}
 	if _, err := entries.Sync(ctx, &gophkeeperv1.SyncRequest{}); err != nil {

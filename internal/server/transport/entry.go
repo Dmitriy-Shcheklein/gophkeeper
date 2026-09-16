@@ -80,7 +80,7 @@ func (h *EntryHandler) Create(ctx context.Context, req *gophkeeperv1.CreateEntry
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.CreateEntryResponse{Entry: entryToProto(entry)}, nil
+	return gophkeeperv1.CreateEntryResponse_builder{Entry: entryToProto(entry)}.Build(), nil
 }
 
 // Get returns a single entry of the authenticated user by id, or
@@ -94,7 +94,7 @@ func (h *EntryHandler) Get(ctx context.Context, req *gophkeeperv1.GetEntryReques
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.GetEntryResponse{Entry: entryToProto(entry)}, nil
+	return gophkeeperv1.GetEntryResponse_builder{Entry: entryToProto(entry)}.Build(), nil
 }
 
 // List returns all entries of the authenticated user. Payloads are
@@ -109,7 +109,7 @@ func (h *EntryHandler) List(ctx context.Context, req *gophkeeperv1.ListEntriesRe
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.ListEntriesResponse{Entries: entriesToProto(entries)}, nil
+	return gophkeeperv1.ListEntriesResponse_builder{Entries: entriesToProto(entries)}.Build(), nil
 }
 
 // Update replaces the mutable content of an entry guarded by
@@ -135,7 +135,7 @@ func (h *EntryHandler) Update(ctx context.Context, req *gophkeeperv1.UpdateEntry
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.UpdateEntryResponse{Entry: entryToProto(entry)}, nil
+	return gophkeeperv1.UpdateEntryResponse_builder{Entry: entryToProto(entry)}.Build(), nil
 }
 
 // Delete removes an entry of the authenticated user by id, or returns
@@ -164,7 +164,7 @@ func (h *EntryHandler) Sync(ctx context.Context, req *gophkeeperv1.SyncRequest) 
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.SyncResponse{Entries: entriesToProto(entries)}, nil
+	return gophkeeperv1.SyncResponse_builder{Entries: entriesToProto(entries)}.Build(), nil
 }
 
 // Upload implements the client-streaming RPC: the first message must
@@ -214,16 +214,16 @@ func (h *EntryHandler) Upload(stream gophkeeperv1.EntryService_UploadServer) err
 		if err != nil {
 			return status.Error(codes.Internal, "read upload message: "+err.Error())
 		}
-		switch p := req.GetPayload().(type) {
-		case *gophkeeperv1.UploadEntryRequest_Chunk:
+		switch req.WhichPayload() {
+		case gophkeeperv1.UploadEntryRequest_Chunk_case:
 			if digest != "" {
 				return status.Error(codes.InvalidArgument, "chunk after footer")
 			}
-			if err := session.AddChunk(p.Chunk.GetData()); err != nil {
+			if err := session.AddChunk(req.GetChunk().GetData()); err != nil {
 				return toStatusError(err)
 			}
-		case *gophkeeperv1.UploadEntryRequest_Footer:
-			digest = p.Footer.GetSha256()
+		case gophkeeperv1.UploadEntryRequest_Footer_case:
+			digest = req.GetFooter().GetSha256()
 		default:
 			return status.Error(codes.InvalidArgument, "unexpected message type in upload stream")
 		}
@@ -238,7 +238,7 @@ func (h *EntryHandler) Upload(stream gophkeeperv1.EntryService_UploadServer) err
 	}
 	committed = true
 
-	return stream.SendAndClose(&gophkeeperv1.UploadEntryResponse{Entry: entryToProto(entry)})
+	return stream.SendAndClose(gophkeeperv1.UploadEntryResponse_builder{Entry: entryToProto(entry)}.Build())
 }
 
 // DownloadEntryData implements the server-streaming RPC: it sends a
@@ -253,11 +253,9 @@ func (h *EntryHandler) DownloadEntryData(req *gophkeeperv1.DownloadEntryDataRequ
 	if err != nil {
 		return toStatusError(err)
 	}
-	if err := stream.Send(&gophkeeperv1.DownloadEntryDataResponse{
-		Payload: &gophkeeperv1.DownloadEntryDataResponse_Header{
-			Header: &gophkeeperv1.DownloadEntryDataHeader{Size: size},
-		},
-	}); err != nil {
+	if err := stream.Send(gophkeeperv1.DownloadEntryDataResponse_builder{
+		Header: gophkeeperv1.DownloadEntryDataHeader_builder{Size: size}.Build(),
+	}.Build()); err != nil {
 		return status.Error(codes.Internal, "send download header: "+err.Error())
 	}
 
@@ -287,11 +285,9 @@ func (h *EntryHandler) DownloadEntryData(req *gophkeeperv1.DownloadEntryDataRequ
 
 // sendChunk streams one payload chunk.
 func sendChunk(stream gophkeeperv1.EntryService_DownloadEntryDataServer, data []byte) error {
-	if err := stream.Send(&gophkeeperv1.DownloadEntryDataResponse{
-		Payload: &gophkeeperv1.DownloadEntryDataResponse_Chunk{
-			Chunk: &gophkeeperv1.DataChunk{Data: data},
-		},
-	}); err != nil {
+	if err := stream.Send(gophkeeperv1.DownloadEntryDataResponse_builder{
+		Chunk: gophkeeperv1.DataChunk_builder{Data: data}.Build(),
+	}.Build()); err != nil {
 		return status.Error(codes.Internal, "send download chunk: "+err.Error())
 	}
 	return nil

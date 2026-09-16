@@ -79,14 +79,14 @@ func entryToProto(e *model.Entry) *v1.Entry {
 	if e == nil {
 		return nil
 	}
-	return &v1.Entry{
+	return v1.Entry_builder{
 		Id:       e.ID,
 		Type:     entryTypeToProto(e.Type),
 		Label:    e.Label,
 		Metadata: e.Metadata,
 		Data:     e.Data,
 		Version:  e.Version,
-	}
+	}.Build()
 }
 
 // entryFromProto converts a proto entry to the client model,

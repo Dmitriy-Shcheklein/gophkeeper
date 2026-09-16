@@ -12,7 +12,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -25,13 +24,11 @@ const (
 
 // RegisterRequest carries credentials for creating a new account.
 type RegisterRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// login is the desired unique login name.
-	Login string `protobuf:"bytes,1,opt,name=login,proto3" json:"login,omitempty"`
-	// password is the plaintext password; the server stores only a hash.
-	Password      string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Login    string                 `protobuf:"bytes,1,opt,name=login,proto3"`
+	xxx_hidden_Password string                 `protobuf:"bytes,2,opt,name=password,proto3"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *RegisterRequest) Reset() {
@@ -59,34 +56,53 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
-func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_auth_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *RegisterRequest) GetLogin() string {
 	if x != nil {
-		return x.Login
+		return x.xxx_hidden_Login
 	}
 	return ""
 }
 
 func (x *RegisterRequest) GetPassword() string {
 	if x != nil {
-		return x.Password
+		return x.xxx_hidden_Password
 	}
 	return ""
 }
 
+func (x *RegisterRequest) SetLogin(v string) {
+	x.xxx_hidden_Login = v
+}
+
+func (x *RegisterRequest) SetPassword(v string) {
+	x.xxx_hidden_Password = v
+}
+
+type RegisterRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// login is the desired unique login name.
+	Login string
+	// password is the plaintext password; the server stores only a hash.
+	Password string
+}
+
+func (b0 RegisterRequest_builder) Build() *RegisterRequest {
+	m0 := &RegisterRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Login = b.Login
+	x.xxx_hidden_Password = b.Password
+	return m0
+}
+
 // RegisterResponse returns the created user and an access token.
 type RegisterResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// user is the newly created account.
-	User *User `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	// access_token is a JWT to authenticate subsequent requests.
-	AccessToken   string `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_User        *User                  `protobuf:"bytes,1,opt,name=user,proto3"`
+	xxx_hidden_AccessToken string                 `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *RegisterResponse) Reset() {
@@ -114,34 +130,64 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
-func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_auth_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *RegisterResponse) GetUser() *User {
 	if x != nil {
-		return x.User
+		return x.xxx_hidden_User
 	}
 	return nil
 }
 
 func (x *RegisterResponse) GetAccessToken() string {
 	if x != nil {
-		return x.AccessToken
+		return x.xxx_hidden_AccessToken
 	}
 	return ""
 }
 
+func (x *RegisterResponse) SetUser(v *User) {
+	x.xxx_hidden_User = v
+}
+
+func (x *RegisterResponse) SetAccessToken(v string) {
+	x.xxx_hidden_AccessToken = v
+}
+
+func (x *RegisterResponse) HasUser() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_User != nil
+}
+
+func (x *RegisterResponse) ClearUser() {
+	x.xxx_hidden_User = nil
+}
+
+type RegisterResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// user is the newly created account.
+	User *User
+	// access_token is a JWT to authenticate subsequent requests.
+	AccessToken string
+}
+
+func (b0 RegisterResponse_builder) Build() *RegisterResponse {
+	m0 := &RegisterResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_User = b.User
+	x.xxx_hidden_AccessToken = b.AccessToken
+	return m0
+}
+
 // LoginRequest carries credentials for authenticating an existing account.
 type LoginRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// login is the account login name.
-	Login string `protobuf:"bytes,1,opt,name=login,proto3" json:"login,omitempty"`
-	// password is the plaintext password to verify.
-	Password      string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Login    string                 `protobuf:"bytes,1,opt,name=login,proto3"`
+	xxx_hidden_Password string                 `protobuf:"bytes,2,opt,name=password,proto3"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *LoginRequest) Reset() {
@@ -169,34 +215,53 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
-func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_auth_proto_rawDescGZIP(), []int{2}
-}
-
 func (x *LoginRequest) GetLogin() string {
 	if x != nil {
-		return x.Login
+		return x.xxx_hidden_Login
 	}
 	return ""
 }
 
 func (x *LoginRequest) GetPassword() string {
 	if x != nil {
-		return x.Password
+		return x.xxx_hidden_Password
 	}
 	return ""
 }
 
+func (x *LoginRequest) SetLogin(v string) {
+	x.xxx_hidden_Login = v
+}
+
+func (x *LoginRequest) SetPassword(v string) {
+	x.xxx_hidden_Password = v
+}
+
+type LoginRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// login is the account login name.
+	Login string
+	// password is the plaintext password to verify.
+	Password string
+}
+
+func (b0 LoginRequest_builder) Build() *LoginRequest {
+	m0 := &LoginRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Login = b.Login
+	x.xxx_hidden_Password = b.Password
+	return m0
+}
+
 // LoginResponse returns the authenticated user and an access token.
 type LoginResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// user is the authenticated account.
-	User *User `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	// access_token is a JWT to authenticate subsequent requests.
-	AccessToken   string `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_User        *User                  `protobuf:"bytes,1,opt,name=user,proto3"`
+	xxx_hidden_AccessToken string                 `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *LoginResponse) Reset() {
@@ -224,23 +289,55 @@ func (x *LoginResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LoginResponse.ProtoReflect.Descriptor instead.
-func (*LoginResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_auth_proto_rawDescGZIP(), []int{3}
-}
-
 func (x *LoginResponse) GetUser() *User {
 	if x != nil {
-		return x.User
+		return x.xxx_hidden_User
 	}
 	return nil
 }
 
 func (x *LoginResponse) GetAccessToken() string {
 	if x != nil {
-		return x.AccessToken
+		return x.xxx_hidden_AccessToken
 	}
 	return ""
+}
+
+func (x *LoginResponse) SetUser(v *User) {
+	x.xxx_hidden_User = v
+}
+
+func (x *LoginResponse) SetAccessToken(v string) {
+	x.xxx_hidden_AccessToken = v
+}
+
+func (x *LoginResponse) HasUser() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_User != nil
+}
+
+func (x *LoginResponse) ClearUser() {
+	x.xxx_hidden_User = nil
+}
+
+type LoginResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// user is the authenticated account.
+	User *User
+	// access_token is a JWT to authenticate subsequent requests.
+	AccessToken string
+}
+
+func (b0 LoginResponse_builder) Build() *LoginResponse {
+	m0 := &LoginResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_User = b.User
+	x.xxx_hidden_AccessToken = b.AccessToken
+	return m0
 }
 
 var File_gophkeeper_v1_auth_proto protoreflect.FileDescriptor
@@ -263,18 +360,6 @@ const file_gophkeeper_v1_auth_proto_rawDesc = "" +
 	"\vAuthService\x12K\n" +
 	"\bRegister\x12\x1e.gophkeeper.v1.RegisterRequest\x1a\x1f.gophkeeper.v1.RegisterResponse\x12B\n" +
 	"\x05Login\x12\x1b.gophkeeper.v1.LoginRequest\x1a\x1c.gophkeeper.v1.LoginResponseBOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
-
-var (
-	file_gophkeeper_v1_auth_proto_rawDescOnce sync.Once
-	file_gophkeeper_v1_auth_proto_rawDescData []byte
-)
-
-func file_gophkeeper_v1_auth_proto_rawDescGZIP() []byte {
-	file_gophkeeper_v1_auth_proto_rawDescOnce.Do(func() {
-		file_gophkeeper_v1_auth_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_gophkeeper_v1_auth_proto_rawDesc), len(file_gophkeeper_v1_auth_proto_rawDesc)))
-	})
-	return file_gophkeeper_v1_auth_proto_rawDescData
-}
 
 var file_gophkeeper_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_gophkeeper_v1_auth_proto_goTypes = []any{

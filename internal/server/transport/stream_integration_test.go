@@ -69,24 +69,26 @@ func TestUploadStreamWithAuth(t *testing.T) {
 	stream, err := client.Upload(ctx)
 	require.NoError(t, err)
 
-	require.NoError(t, stream.Send(&v1.UploadEntryRequest{Payload: &v1.UploadEntryRequest_Header{
-		Header: &v1.UploadEntryHeader{Entry: &v1.Entry{
-			Type: v1.EntryType_ENTRY_TYPE_BINARY, Label: "file.bin",
-		}},
-	}}))
+	require.NoError(t, stream.Send(v1.UploadEntryRequest_builder{
+		Header: (&v1.UploadEntryHeader_builder{
+			Entry: (&v1.Entry_builder{
+				Type: v1.EntryType_ENTRY_TYPE_BINARY, Label: "file.bin",
+			}).Build(),
+		}).Build(),
+	}.Build()))
 
 	payload := strings.Repeat("x", 3*1024)
 	h := sha256.New()
 	for i := 0; i < 3; i++ {
 		chunk := []byte(payload[:1024])
-		require.NoError(t, stream.Send(&v1.UploadEntryRequest{Payload: &v1.UploadEntryRequest_Chunk{
-			Chunk: &v1.UploadEntryChunk{Data: chunk},
-		}}), "chunk %d", i)
+		require.NoError(t, stream.Send(v1.UploadEntryRequest_builder{
+			Chunk: (&v1.UploadEntryChunk_builder{Data: chunk}).Build(),
+		}.Build()), "chunk %d", i)
 		h.Write(chunk)
 	}
-	require.NoError(t, stream.Send(&v1.UploadEntryRequest{Payload: &v1.UploadEntryRequest_Footer{
-		Footer: &v1.UploadEntryFooter{Sha256: hex.EncodeToString(h.Sum(nil))},
-	}}))
+	require.NoError(t, stream.Send(v1.UploadEntryRequest_builder{
+		Footer: (&v1.UploadEntryFooter_builder{Sha256: hex.EncodeToString(h.Sum(nil))}).Build(),
+	}.Build()))
 	resp, err := stream.CloseAndRecv()
 	require.NoError(t, err)
 	require.NotNil(t, resp.GetEntry())

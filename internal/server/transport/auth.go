@@ -52,7 +52,7 @@ func (h *AuthHandler) Register(ctx context.Context, req *gophkeeperv1.RegisterRe
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.RegisterResponse{User: userToProto(user), AccessToken: token}, nil
+	return gophkeeperv1.RegisterResponse_builder{User: userToProto(user), AccessToken: token}.Build(), nil
 }
 
 // Login verifies the credentials and returns the authenticated user
@@ -62,5 +62,5 @@ func (h *AuthHandler) Login(ctx context.Context, req *gophkeeperv1.LoginRequest)
 	if err != nil {
 		return nil, toStatusError(err)
 	}
-	return &gophkeeperv1.LoginResponse{User: userToProto(user), AccessToken: token}, nil
+	return gophkeeperv1.LoginResponse_builder{User: userToProto(user), AccessToken: token}.Build(), nil
 }

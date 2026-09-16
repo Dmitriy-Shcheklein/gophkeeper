@@ -57,10 +57,10 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	}
 	handler := NewAuthHandler(fake)
 
-	resp, err := handler.Register(context.Background(), &gophkeeperv1.RegisterRequest{
+	resp, err := handler.Register(context.Background(), gophkeeperv1.RegisterRequest_builder{
 		Login:    "alice",
 		Password: "strong-password",
-	})
+	}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "alice", gotLogin)
@@ -114,10 +114,10 @@ func TestAuthHandler_Register_ErrorMapping(t *testing.T) {
 			}
 			handler := NewAuthHandler(fake)
 
-			resp, err := handler.Register(context.Background(), &gophkeeperv1.RegisterRequest{
+			resp, err := handler.Register(context.Background(), gophkeeperv1.RegisterRequest_builder{
 				Login:    "alice",
 				Password: "strong-password",
-			})
+			}.Build())
 
 			require.Nil(t, resp)
 			assert.Equal(t, tt.wantCode, status.Code(err))
@@ -136,10 +136,10 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	}
 	handler := NewAuthHandler(fake)
 
-	resp, err := handler.Login(context.Background(), &gophkeeperv1.LoginRequest{
+	resp, err := handler.Login(context.Background(), gophkeeperv1.LoginRequest_builder{
 		Login:    "alice",
 		Password: "strong-password",
-	})
+	}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "alice", gotLogin)
@@ -187,10 +187,10 @@ func TestAuthHandler_Login_ErrorMapping(t *testing.T) {
 			}
 			handler := NewAuthHandler(fake)
 
-			resp, err := handler.Login(context.Background(), &gophkeeperv1.LoginRequest{
+			resp, err := handler.Login(context.Background(), gophkeeperv1.LoginRequest_builder{
 				Login:    "alice",
 				Password: "strong-password",
-			})
+			}.Build())
 
 			require.Nil(t, resp)
 			assert.Equal(t, tt.wantCode, status.Code(err))

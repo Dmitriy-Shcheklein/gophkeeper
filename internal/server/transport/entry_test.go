@@ -95,14 +95,14 @@ func TestEntryHandler_Create_Success(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Create(claimsContext("user-1"), &gophkeeperv1.CreateEntryRequest{
-		Entry: &gophkeeperv1.Entry{
+	resp, err := handler.Create(claimsContext("user-1"), gophkeeperv1.CreateEntryRequest_builder{
+		Entry: (&gophkeeperv1.Entry_builder{
 			Type:     gophkeeperv1.EntryType_ENTRY_TYPE_TEXT,
 			Label:    "note",
 			Metadata: "meta",
 			Data:     []byte("payload"),
-		},
-	})
+		}).Build(),
+	}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", gotUserID)
@@ -126,9 +126,9 @@ func TestEntryHandler_Create_Success(t *testing.T) {
 func TestEntryHandler_Create_MissingClaims(t *testing.T) {
 	handler := NewEntryHandler(&fakeEntryService{})
 
-	resp, err := handler.Create(context.Background(), &gophkeeperv1.CreateEntryRequest{
-		Entry: &gophkeeperv1.Entry{Label: "note", Data: []byte("x")},
-	})
+	resp, err := handler.Create(context.Background(), gophkeeperv1.CreateEntryRequest_builder{
+		Entry: (&gophkeeperv1.Entry_builder{Label: "note", Data: []byte("x")}).Build(),
+	}.Build())
 
 	require.Nil(t, resp)
 	assert.Equal(t, codes.Internal, status.Code(err))
@@ -170,9 +170,9 @@ func TestEntryHandler_Create_ErrorMapping(t *testing.T) {
 			}
 			handler := NewEntryHandler(fake)
 
-			resp, err := handler.Create(claimsContext("user-1"), &gophkeeperv1.CreateEntryRequest{
-				Entry: &gophkeeperv1.Entry{Label: "note", Data: []byte("x")},
-			})
+			resp, err := handler.Create(claimsContext("user-1"), gophkeeperv1.CreateEntryRequest_builder{
+				Entry: (&gophkeeperv1.Entry_builder{Label: "note", Data: []byte("x")}).Build(),
+			}.Build())
 
 			require.Nil(t, resp)
 			assert.Equal(t, tt.wantCode, status.Code(err))
@@ -192,7 +192,7 @@ func TestEntryHandler_Get_Success(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Get(claimsContext("user-1"), &gophkeeperv1.GetEntryRequest{Id: "entry-1"})
+	resp, err := handler.Get(claimsContext("user-1"), gophkeeperv1.GetEntryRequest_builder{Id: "entry-1"}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", gotUserID)
@@ -210,7 +210,7 @@ func TestEntryHandler_Get_NotFound(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Get(claimsContext("user-1"), &gophkeeperv1.GetEntryRequest{Id: "missing"})
+	resp, err := handler.Get(claimsContext("user-1"), gophkeeperv1.GetEntryRequest_builder{Id: "missing"}.Build())
 
 	require.Nil(t, resp)
 	assert.Equal(t, codes.NotFound, status.Code(err))
@@ -237,7 +237,7 @@ func TestEntryHandler_List_Success(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.List(claimsContext("user-1"), &gophkeeperv1.ListEntriesRequest{})
+	resp, err := handler.List(claimsContext("user-1"), gophkeeperv1.ListEntriesRequest_builder{}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", gotUserID)
@@ -262,16 +262,16 @@ func TestEntryHandler_Update_Success(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Update(claimsContext("user-1"), &gophkeeperv1.UpdateEntryRequest{
-		Entry: &gophkeeperv1.Entry{
+	resp, err := handler.Update(claimsContext("user-1"), gophkeeperv1.UpdateEntryRequest_builder{
+		Entry: (&gophkeeperv1.Entry_builder{
 			Id:       "entry-1",
 			Type:     gophkeeperv1.EntryType_ENTRY_TYPE_TEXT,
 			Label:    "renamed",
 			Metadata: "new-meta",
 			Data:     []byte("new-payload"),
 			Version:  7,
-		},
-	})
+		}).Build(),
+	}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", gotUserID, "userID must come from claims, not the request")
@@ -296,9 +296,9 @@ func TestEntryHandler_Update_Conflict(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Update(claimsContext("user-1"), &gophkeeperv1.UpdateEntryRequest{
-		Entry: &gophkeeperv1.Entry{Id: "entry-1", Version: 6, Label: "l", Data: []byte("d")},
-	})
+	resp, err := handler.Update(claimsContext("user-1"), gophkeeperv1.UpdateEntryRequest_builder{
+		Entry: (&gophkeeperv1.Entry_builder{Id: "entry-1", Version: 6, Label: "l", Data: []byte("d")}).Build(),
+	}.Build())
 
 	require.Nil(t, resp)
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
@@ -315,7 +315,7 @@ func TestEntryHandler_Delete_Success(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Delete(claimsContext("user-1"), &gophkeeperv1.DeleteEntryRequest{Id: "entry-1"})
+	resp, err := handler.Delete(claimsContext("user-1"), gophkeeperv1.DeleteEntryRequest_builder{Id: "entry-1"}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", gotUserID)
@@ -331,7 +331,7 @@ func TestEntryHandler_Delete_NotFound(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Delete(claimsContext("user-1"), &gophkeeperv1.DeleteEntryRequest{Id: "missing"})
+	resp, err := handler.Delete(claimsContext("user-1"), gophkeeperv1.DeleteEntryRequest_builder{Id: "missing"}.Build())
 
 	require.Nil(t, resp)
 	assert.Equal(t, codes.NotFound, status.Code(err))
@@ -348,7 +348,7 @@ func TestEntryHandler_Sync_Success(t *testing.T) {
 	}
 	handler := NewEntryHandler(fake)
 
-	resp, err := handler.Sync(claimsContext("user-1"), &gophkeeperv1.SyncRequest{})
+	resp, err := handler.Sync(claimsContext("user-1"), gophkeeperv1.SyncRequest_builder{}.Build())
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-1", gotUserID)
@@ -360,7 +360,7 @@ func TestEntryHandler_Sync_Success(t *testing.T) {
 func TestEntryHandler_Sync_MissingClaims(t *testing.T) {
 	handler := NewEntryHandler(&fakeEntryService{})
 
-	resp, err := handler.Sync(context.Background(), &gophkeeperv1.SyncRequest{})
+	resp, err := handler.Sync(context.Background(), gophkeeperv1.SyncRequest_builder{}.Build())
 
 	require.Nil(t, resp)
 	assert.Equal(t, codes.Internal, status.Code(err))

@@ -12,7 +12,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -25,12 +24,10 @@ const (
 
 // CreateEntryRequest contains the entry to store for the authenticated user.
 type CreateEntryRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry holds the type, label, metadata and data to store.
-	// id, version and timestamps are ignored by the server.
-	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CreateEntryRequest) Reset() {
@@ -58,25 +55,50 @@ func (x *CreateEntryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateEntryRequest.ProtoReflect.Descriptor instead.
-func (*CreateEntryRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *CreateEntryRequest) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
 }
 
+func (x *CreateEntryRequest) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *CreateEntryRequest) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *CreateEntryRequest) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type CreateEntryRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry holds the type, label, metadata and data to store.
+	// id, version and timestamps are ignored by the server.
+	Entry *Entry
+}
+
+func (b0 CreateEntryRequest_builder) Build() *CreateEntryRequest {
+	m0 := &CreateEntryRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	return m0
+}
+
 // CreateEntryResponse returns the stored entry as seen by the server.
 type CreateEntryResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry includes the server-assigned id, version and timestamps.
-	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CreateEntryResponse) Reset() {
@@ -104,23 +126,47 @@ func (x *CreateEntryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateEntryResponse.ProtoReflect.Descriptor instead.
-func (*CreateEntryResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *CreateEntryResponse) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
 }
 
+func (x *CreateEntryResponse) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *CreateEntryResponse) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *CreateEntryResponse) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type CreateEntryResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry includes the server-assigned id, version and timestamps.
+	Entry *Entry
+}
+
+func (b0 CreateEntryResponse_builder) Build() *CreateEntryResponse {
+	m0 := &CreateEntryResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	return m0
+}
+
 // GetEntryRequest identifies an entry to fetch.
 type GetEntryRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the entry identifier.
-	Id            string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Id string                 `protobuf:"bytes,1,opt,name=id,proto3"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,25 +196,38 @@ func (x *GetEntryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetEntryRequest.ProtoReflect.Descriptor instead.
-func (*GetEntryRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{2}
-}
-
 func (x *GetEntryRequest) GetId() string {
 	if x != nil {
-		return x.Id
+		return x.xxx_hidden_Id
 	}
 	return ""
 }
 
+func (x *GetEntryRequest) SetId(v string) {
+	x.xxx_hidden_Id = v
+}
+
+type GetEntryRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// id is the entry identifier.
+	Id string
+}
+
+func (b0 GetEntryRequest_builder) Build() *GetEntryRequest {
+	m0 := &GetEntryRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Id = b.Id
+	return m0
+}
+
 // GetEntryResponse returns the requested entry.
 type GetEntryResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry is the stored entry with all fields populated.
-	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetEntryResponse) Reset() {
@@ -196,29 +255,49 @@ func (x *GetEntryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetEntryResponse.ProtoReflect.Descriptor instead.
-func (*GetEntryResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{3}
-}
-
 func (x *GetEntryResponse) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
 }
 
+func (x *GetEntryResponse) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *GetEntryResponse) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *GetEntryResponse) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type GetEntryResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry is the stored entry with all fields populated.
+	Entry *Entry
+}
+
+func (b0 GetEntryResponse_builder) Build() *GetEntryResponse {
+	m0 := &GetEntryResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	return m0
+}
+
 // ListEntriesRequest asks for all entries of the authenticated user.
 type ListEntriesRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Currently no filters; reserved for future pagination.
-	// include_data controls whether entry payloads are carried in the
-	// response. By default it is false: entries come with metadata and
-	// data_size only, and the content is fetched with DownloadEntryData
-	// on demand. This keeps List usable with large binary entries.
-	IncludeData   bool `protobuf:"varint,1,opt,name=include_data,json=includeData,proto3" json:"include_data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_IncludeData bool                   `protobuf:"varint,1,opt,name=include_data,json=includeData,proto3"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ListEntriesRequest) Reset() {
@@ -246,25 +325,42 @@ func (x *ListEntriesRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListEntriesRequest.ProtoReflect.Descriptor instead.
-func (*ListEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{4}
-}
-
 func (x *ListEntriesRequest) GetIncludeData() bool {
 	if x != nil {
-		return x.IncludeData
+		return x.xxx_hidden_IncludeData
 	}
 	return false
 }
 
+func (x *ListEntriesRequest) SetIncludeData(v bool) {
+	x.xxx_hidden_IncludeData = v
+}
+
+type ListEntriesRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// Currently no filters; reserved for future pagination.
+	// include_data controls whether entry payloads are carried in the
+	// response. By default it is false: entries come with metadata and
+	// data_size only, and the content is fetched with DownloadEntryData
+	// on demand. This keeps List usable with large binary entries.
+	IncludeData bool
+}
+
+func (b0 ListEntriesRequest_builder) Build() *ListEntriesRequest {
+	m0 := &ListEntriesRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_IncludeData = b.IncludeData
+	return m0
+}
+
 // ListEntriesResponse returns all entries of the user.
 type ListEntriesResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entries are the user's entries in unspecified order.
-	Entries       []*Entry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entries *[]*Entry              `protobuf:"bytes,1,rep,name=entries,proto3"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ListEntriesResponse) Reset() {
@@ -292,26 +388,40 @@ func (x *ListEntriesResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListEntriesResponse.ProtoReflect.Descriptor instead.
-func (*ListEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{5}
-}
-
 func (x *ListEntriesResponse) GetEntries() []*Entry {
 	if x != nil {
-		return x.Entries
+		if x.xxx_hidden_Entries != nil {
+			return *x.xxx_hidden_Entries
+		}
 	}
 	return nil
 }
 
+func (x *ListEntriesResponse) SetEntries(v []*Entry) {
+	x.xxx_hidden_Entries = &v
+}
+
+type ListEntriesResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entries are the user's entries in unspecified order.
+	Entries []*Entry
+}
+
+func (b0 ListEntriesResponse_builder) Build() *ListEntriesResponse {
+	m0 := &ListEntriesResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entries = &b.Entries
+	return m0
+}
+
 // UpdateEntryRequest contains the new entry state for optimistic locking.
 type UpdateEntryRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry must carry the existing id, label/metadata/data changes
-	// and the version the update is based on.
-	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *UpdateEntryRequest) Reset() {
@@ -339,25 +449,50 @@ func (x *UpdateEntryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UpdateEntryRequest.ProtoReflect.Descriptor instead.
-func (*UpdateEntryRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{6}
-}
-
 func (x *UpdateEntryRequest) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
 }
 
+func (x *UpdateEntryRequest) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *UpdateEntryRequest) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *UpdateEntryRequest) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type UpdateEntryRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry must carry the existing id, label/metadata/data changes
+	// and the version the update is based on.
+	Entry *Entry
+}
+
+func (b0 UpdateEntryRequest_builder) Build() *UpdateEntryRequest {
+	m0 := &UpdateEntryRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	return m0
+}
+
 // UpdateEntryResponse returns the updated entry with a bumped version.
 type UpdateEntryResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry is the entry after the update.
-	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *UpdateEntryResponse) Reset() {
@@ -385,23 +520,47 @@ func (x *UpdateEntryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UpdateEntryResponse.ProtoReflect.Descriptor instead.
-func (*UpdateEntryResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{7}
-}
-
 func (x *UpdateEntryResponse) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
 }
 
+func (x *UpdateEntryResponse) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *UpdateEntryResponse) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *UpdateEntryResponse) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type UpdateEntryResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry is the entry after the update.
+	Entry *Entry
+}
+
+func (b0 UpdateEntryResponse_builder) Build() *UpdateEntryResponse {
+	m0 := &UpdateEntryResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	return m0
+}
+
 // DeleteEntryRequest identifies an entry to remove.
 type DeleteEntryRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the entry identifier.
-	Id            string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Id string                 `protobuf:"bytes,1,opt,name=id,proto3"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -431,21 +590,35 @@ func (x *DeleteEntryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteEntryRequest.ProtoReflect.Descriptor instead.
-func (*DeleteEntryRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{8}
-}
-
 func (x *DeleteEntryRequest) GetId() string {
 	if x != nil {
-		return x.Id
+		return x.xxx_hidden_Id
 	}
 	return ""
 }
 
+func (x *DeleteEntryRequest) SetId(v string) {
+	x.xxx_hidden_Id = v
+}
+
+type DeleteEntryRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// id is the entry identifier.
+	Id string
+}
+
+func (b0 DeleteEntryRequest_builder) Build() *DeleteEntryRequest {
+	m0 := &DeleteEntryRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Id = b.Id
+	return m0
+}
+
 // DeleteEntryResponse confirms the deletion.
 type DeleteEntryResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -475,25 +648,26 @@ func (x *DeleteEntryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteEntryResponse.ProtoReflect.Descriptor instead.
-func (*DeleteEntryResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{9}
+type DeleteEntryResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+}
+
+func (b0 DeleteEntryResponse_builder) Build() *DeleteEntryResponse {
+	m0 := &DeleteEntryResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	return m0
 }
 
 // UploadEntryHeader is the first message of an UploadEntry stream: it
 // describes the entry being stored before any payload chunks follow.
 type UploadEntryHeader struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry carries type, label and metadata. id, version and
-	// timestamps are ignored by the server; data must be empty — the
-	// payload arrives as chunks.
-	Entry *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	// expected_version is the optimistic-locking version the upload is
-	// based on: 0 creates a new entry, a positive value updates the
-	// existing one and fails with FailedPrecondition when stale.
-	ExpectedVersion int64 `protobuf:"varint,2,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                      protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry           *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	xxx_hidden_ExpectedVersion int64                  `protobuf:"varint,2,opt,name=expected_version,json=expectedVersion,proto3"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *UploadEntryHeader) Reset() {
@@ -521,33 +695,68 @@ func (x *UploadEntryHeader) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadEntryHeader.ProtoReflect.Descriptor instead.
-func (*UploadEntryHeader) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{10}
-}
-
 func (x *UploadEntryHeader) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
 }
 
 func (x *UploadEntryHeader) GetExpectedVersion() int64 {
 	if x != nil {
-		return x.ExpectedVersion
+		return x.xxx_hidden_ExpectedVersion
 	}
 	return 0
+}
+
+func (x *UploadEntryHeader) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *UploadEntryHeader) SetExpectedVersion(v int64) {
+	x.xxx_hidden_ExpectedVersion = v
+}
+
+func (x *UploadEntryHeader) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *UploadEntryHeader) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type UploadEntryHeader_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry carries type, label and metadata. id, version and
+	// timestamps are ignored by the server; data must be empty — the
+	// payload arrives as chunks.
+	Entry *Entry
+	// expected_version is the optimistic-locking version the upload is
+	// based on: 0 creates a new entry, a positive value updates the
+	// existing one and fails with FailedPrecondition when stale.
+	ExpectedVersion int64
+}
+
+func (b0 UploadEntryHeader_builder) Build() *UploadEntryHeader {
+	m0 := &UploadEntryHeader{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	x.xxx_hidden_ExpectedVersion = b.ExpectedVersion
+	return m0
 }
 
 // UploadEntryChunk carries one piece of the payload. The server
 // concatenates chunks in the order they are sent.
 type UploadEntryChunk struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// data is a piece of the payload.
-	Data          []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Data []byte                 `protobuf:"bytes,1,opt,name=data,proto3"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *UploadEntryChunk) Reset() {
@@ -575,27 +784,43 @@ func (x *UploadEntryChunk) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadEntryChunk.ProtoReflect.Descriptor instead.
-func (*UploadEntryChunk) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{11}
-}
-
 func (x *UploadEntryChunk) GetData() []byte {
 	if x != nil {
-		return x.Data
+		return x.xxx_hidden_Data
 	}
 	return nil
+}
+
+func (x *UploadEntryChunk) SetData(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Data = v
+}
+
+type UploadEntryChunk_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// data is a piece of the payload.
+	Data []byte
+}
+
+func (b0 UploadEntryChunk_builder) Build() *UploadEntryChunk {
+	m0 := &UploadEntryChunk{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Data = b.Data
+	return m0
 }
 
 // UploadEntryFooter is the last message of an UploadEntry stream. The
 // server verifies that the digest matches the payload it received and
 // rejects the whole upload on mismatch.
 type UploadEntryFooter struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// sha256 is the hex-encoded SHA-256 digest of the full payload.
-	Sha256        string `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Sha256 string                 `protobuf:"bytes,1,opt,name=sha256,proto3"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *UploadEntryFooter) Reset() {
@@ -623,31 +848,40 @@ func (x *UploadEntryFooter) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadEntryFooter.ProtoReflect.Descriptor instead.
-func (*UploadEntryFooter) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{12}
-}
-
 func (x *UploadEntryFooter) GetSha256() string {
 	if x != nil {
-		return x.Sha256
+		return x.xxx_hidden_Sha256
 	}
 	return ""
+}
+
+func (x *UploadEntryFooter) SetSha256(v string) {
+	x.xxx_hidden_Sha256 = v
+}
+
+type UploadEntryFooter_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// sha256 is the hex-encoded SHA-256 digest of the full payload.
+	Sha256 string
+}
+
+func (b0 UploadEntryFooter_builder) Build() *UploadEntryFooter {
+	m0 := &UploadEntryFooter{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Sha256 = b.Sha256
+	return m0
 }
 
 // UploadEntryRequest is a single message of the UploadEntry stream:
 // the first message must be a header, the last one a footer, all
 // messages in between are chunks.
 type UploadEntryRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Payload:
-	//
-	//	*UploadEntryRequest_Header
-	//	*UploadEntryRequest_Chunk
-	//	*UploadEntryRequest_Footer
-	Payload       isUploadEntryRequest_Payload `protobuf_oneof:"payload"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState       `protogen:"opaque.v1"`
+	xxx_hidden_Payload isUploadEntryRequest_Payload `protobuf_oneof:"payload"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *UploadEntryRequest) Reset() {
@@ -675,21 +909,9 @@ func (x *UploadEntryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadEntryRequest.ProtoReflect.Descriptor instead.
-func (*UploadEntryRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *UploadEntryRequest) GetPayload() isUploadEntryRequest_Payload {
-	if x != nil {
-		return x.Payload
-	}
-	return nil
-}
-
 func (x *UploadEntryRequest) GetHeader() *UploadEntryHeader {
 	if x != nil {
-		if x, ok := x.Payload.(*UploadEntryRequest_Header); ok {
+		if x, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Header); ok {
 			return x.Header
 		}
 	}
@@ -698,7 +920,7 @@ func (x *UploadEntryRequest) GetHeader() *UploadEntryHeader {
 
 func (x *UploadEntryRequest) GetChunk() *UploadEntryChunk {
 	if x != nil {
-		if x, ok := x.Payload.(*UploadEntryRequest_Chunk); ok {
+		if x, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Chunk); ok {
 			return x.Chunk
 		}
 	}
@@ -707,46 +929,181 @@ func (x *UploadEntryRequest) GetChunk() *UploadEntryChunk {
 
 func (x *UploadEntryRequest) GetFooter() *UploadEntryFooter {
 	if x != nil {
-		if x, ok := x.Payload.(*UploadEntryRequest_Footer); ok {
+		if x, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Footer); ok {
 			return x.Footer
 		}
 	}
 	return nil
 }
 
+func (x *UploadEntryRequest) SetHeader(v *UploadEntryHeader) {
+	if v == nil {
+		x.xxx_hidden_Payload = nil
+		return
+	}
+	x.xxx_hidden_Payload = &uploadEntryRequest_Header{v}
+}
+
+func (x *UploadEntryRequest) SetChunk(v *UploadEntryChunk) {
+	if v == nil {
+		x.xxx_hidden_Payload = nil
+		return
+	}
+	x.xxx_hidden_Payload = &uploadEntryRequest_Chunk{v}
+}
+
+func (x *UploadEntryRequest) SetFooter(v *UploadEntryFooter) {
+	if v == nil {
+		x.xxx_hidden_Payload = nil
+		return
+	}
+	x.xxx_hidden_Payload = &uploadEntryRequest_Footer{v}
+}
+
+func (x *UploadEntryRequest) HasPayload() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Payload != nil
+}
+
+func (x *UploadEntryRequest) HasHeader() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Header)
+	return ok
+}
+
+func (x *UploadEntryRequest) HasChunk() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Chunk)
+	return ok
+}
+
+func (x *UploadEntryRequest) HasFooter() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Footer)
+	return ok
+}
+
+func (x *UploadEntryRequest) ClearPayload() {
+	x.xxx_hidden_Payload = nil
+}
+
+func (x *UploadEntryRequest) ClearHeader() {
+	if _, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Header); ok {
+		x.xxx_hidden_Payload = nil
+	}
+}
+
+func (x *UploadEntryRequest) ClearChunk() {
+	if _, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Chunk); ok {
+		x.xxx_hidden_Payload = nil
+	}
+}
+
+func (x *UploadEntryRequest) ClearFooter() {
+	if _, ok := x.xxx_hidden_Payload.(*uploadEntryRequest_Footer); ok {
+		x.xxx_hidden_Payload = nil
+	}
+}
+
+const UploadEntryRequest_Payload_not_set_case case_UploadEntryRequest_Payload = 0
+const UploadEntryRequest_Header_case case_UploadEntryRequest_Payload = 1
+const UploadEntryRequest_Chunk_case case_UploadEntryRequest_Payload = 2
+const UploadEntryRequest_Footer_case case_UploadEntryRequest_Payload = 3
+
+func (x *UploadEntryRequest) WhichPayload() case_UploadEntryRequest_Payload {
+	if x == nil {
+		return UploadEntryRequest_Payload_not_set_case
+	}
+	switch x.xxx_hidden_Payload.(type) {
+	case *uploadEntryRequest_Header:
+		return UploadEntryRequest_Header_case
+	case *uploadEntryRequest_Chunk:
+		return UploadEntryRequest_Chunk_case
+	case *uploadEntryRequest_Footer:
+		return UploadEntryRequest_Footer_case
+	default:
+		return UploadEntryRequest_Payload_not_set_case
+	}
+}
+
+type UploadEntryRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// Fields of oneof xxx_hidden_Payload:
+	// header starts the upload and describes the entry.
+	Header *UploadEntryHeader
+	// chunk is one piece of the entry payload.
+	Chunk *UploadEntryChunk
+	// footer ends the upload with the payload digest.
+	Footer *UploadEntryFooter
+	// -- end of xxx_hidden_Payload
+}
+
+func (b0 UploadEntryRequest_builder) Build() *UploadEntryRequest {
+	m0 := &UploadEntryRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Header != nil {
+		x.xxx_hidden_Payload = &uploadEntryRequest_Header{b.Header}
+	}
+	if b.Chunk != nil {
+		x.xxx_hidden_Payload = &uploadEntryRequest_Chunk{b.Chunk}
+	}
+	if b.Footer != nil {
+		x.xxx_hidden_Payload = &uploadEntryRequest_Footer{b.Footer}
+	}
+	return m0
+}
+
+type case_UploadEntryRequest_Payload protoreflect.FieldNumber
+
+func (x case_UploadEntryRequest_Payload) String() string {
+	md := file_gophkeeper_v1_service_proto_msgTypes[13].Descriptor()
+	if x == 0 {
+		return "not set"
+	}
+	return protoimpl.X.MessageFieldStringOf(md, protoreflect.FieldNumber(x))
+}
+
 type isUploadEntryRequest_Payload interface {
 	isUploadEntryRequest_Payload()
 }
 
-type UploadEntryRequest_Header struct {
+type uploadEntryRequest_Header struct {
 	// header starts the upload and describes the entry.
 	Header *UploadEntryHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
 }
 
-type UploadEntryRequest_Chunk struct {
+type uploadEntryRequest_Chunk struct {
 	// chunk is one piece of the entry payload.
 	Chunk *UploadEntryChunk `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
 }
 
-type UploadEntryRequest_Footer struct {
+type uploadEntryRequest_Footer struct {
 	// footer ends the upload with the payload digest.
 	Footer *UploadEntryFooter `protobuf:"bytes,3,opt,name=footer,proto3,oneof"`
 }
 
-func (*UploadEntryRequest_Header) isUploadEntryRequest_Payload() {}
+func (*uploadEntryRequest_Header) isUploadEntryRequest_Payload() {}
 
-func (*UploadEntryRequest_Chunk) isUploadEntryRequest_Payload() {}
+func (*uploadEntryRequest_Chunk) isUploadEntryRequest_Payload() {}
 
-func (*UploadEntryRequest_Footer) isUploadEntryRequest_Payload() {}
+func (*uploadEntryRequest_Footer) isUploadEntryRequest_Payload() {}
 
 // UploadEntryResponse returns the stored entry as seen by the server.
 type UploadEntryResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entry includes the server-assigned id, version and timestamps.
-	// data is empty; use DownloadEntryData to fetch the content.
-	Entry         *Entry `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entry *Entry                 `protobuf:"bytes,1,opt,name=entry,proto3"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *UploadEntryResponse) Reset() {
@@ -774,24 +1131,49 @@ func (x *UploadEntryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadEntryResponse.ProtoReflect.Descriptor instead.
-func (*UploadEntryResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{14}
-}
-
 func (x *UploadEntryResponse) GetEntry() *Entry {
 	if x != nil {
-		return x.Entry
+		return x.xxx_hidden_Entry
 	}
 	return nil
+}
+
+func (x *UploadEntryResponse) SetEntry(v *Entry) {
+	x.xxx_hidden_Entry = v
+}
+
+func (x *UploadEntryResponse) HasEntry() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Entry != nil
+}
+
+func (x *UploadEntryResponse) ClearEntry() {
+	x.xxx_hidden_Entry = nil
+}
+
+type UploadEntryResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entry includes the server-assigned id, version and timestamps.
+	// data is empty; use DownloadEntryData to fetch the content.
+	Entry *Entry
+}
+
+func (b0 UploadEntryResponse_builder) Build() *UploadEntryResponse {
+	m0 := &UploadEntryResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entry = b.Entry
+	return m0
 }
 
 // DownloadEntryDataRequest identifies an entry whose payload should
 // be streamed.
 type DownloadEntryDataRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the entry identifier.
-	Id            string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Id string                 `protobuf:"bytes,1,opt,name=id,proto3"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -821,27 +1203,40 @@ func (x *DownloadEntryDataRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DownloadEntryDataRequest.ProtoReflect.Descriptor instead.
-func (*DownloadEntryDataRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{15}
-}
-
 func (x *DownloadEntryDataRequest) GetId() string {
 	if x != nil {
-		return x.Id
+		return x.xxx_hidden_Id
 	}
 	return ""
+}
+
+func (x *DownloadEntryDataRequest) SetId(v string) {
+	x.xxx_hidden_Id = v
+}
+
+type DownloadEntryDataRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// id is the entry identifier.
+	Id string
+}
+
+func (b0 DownloadEntryDataRequest_builder) Build() *DownloadEntryDataRequest {
+	m0 := &DownloadEntryDataRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Id = b.Id
+	return m0
 }
 
 // DownloadEntryDataHeader is the first message of the
 // DownloadEntryData stream: it reports the payload size before the
 // chunks follow.
 type DownloadEntryDataHeader struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// size is the total payload size in bytes.
-	Size          int64 `protobuf:"varint,1,opt,name=size,proto3" json:"size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Size int64                  `protobuf:"varint,1,opt,name=size,proto3"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *DownloadEntryDataHeader) Reset() {
@@ -869,25 +1264,38 @@ func (x *DownloadEntryDataHeader) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DownloadEntryDataHeader.ProtoReflect.Descriptor instead.
-func (*DownloadEntryDataHeader) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{16}
-}
-
 func (x *DownloadEntryDataHeader) GetSize() int64 {
 	if x != nil {
-		return x.Size
+		return x.xxx_hidden_Size
 	}
 	return 0
 }
 
+func (x *DownloadEntryDataHeader) SetSize(v int64) {
+	x.xxx_hidden_Size = v
+}
+
+type DownloadEntryDataHeader_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// size is the total payload size in bytes.
+	Size int64
+}
+
+func (b0 DownloadEntryDataHeader_builder) Build() *DownloadEntryDataHeader {
+	m0 := &DownloadEntryDataHeader{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Size = b.Size
+	return m0
+}
+
 // DataChunk carries one piece of an entry payload.
 type DataChunk struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// data is a piece of the payload.
-	Data          []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Data []byte                 `protobuf:"bytes,1,opt,name=data,proto3"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *DataChunk) Reset() {
@@ -915,30 +1323,43 @@ func (x *DataChunk) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DataChunk.ProtoReflect.Descriptor instead.
-func (*DataChunk) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{17}
-}
-
 func (x *DataChunk) GetData() []byte {
 	if x != nil {
-		return x.Data
+		return x.xxx_hidden_Data
 	}
 	return nil
+}
+
+func (x *DataChunk) SetData(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Data = v
+}
+
+type DataChunk_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// data is a piece of the payload.
+	Data []byte
+}
+
+func (b0 DataChunk_builder) Build() *DataChunk {
+	m0 := &DataChunk{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Data = b.Data
+	return m0
 }
 
 // DownloadEntryDataResponse is a single message of the
 // DownloadEntryData stream: the first message is a header, all
 // following messages chunks.
 type DownloadEntryDataResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Payload:
-	//
-	//	*DownloadEntryDataResponse_Header
-	//	*DownloadEntryDataResponse_Chunk
-	Payload       isDownloadEntryDataResponse_Payload `protobuf_oneof:"payload"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState              `protogen:"opaque.v1"`
+	xxx_hidden_Payload isDownloadEntryDataResponse_Payload `protobuf_oneof:"payload"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *DownloadEntryDataResponse) Reset() {
@@ -966,21 +1387,9 @@ func (x *DownloadEntryDataResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DownloadEntryDataResponse.ProtoReflect.Descriptor instead.
-func (*DownloadEntryDataResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{18}
-}
-
-func (x *DownloadEntryDataResponse) GetPayload() isDownloadEntryDataResponse_Payload {
-	if x != nil {
-		return x.Payload
-	}
-	return nil
-}
-
 func (x *DownloadEntryDataResponse) GetHeader() *DownloadEntryDataHeader {
 	if x != nil {
-		if x, ok := x.Payload.(*DownloadEntryDataResponse_Header); ok {
+		if x, ok := x.xxx_hidden_Payload.(*downloadEntryDataResponse_Header); ok {
 			return x.Header
 		}
 	}
@@ -989,43 +1398,145 @@ func (x *DownloadEntryDataResponse) GetHeader() *DownloadEntryDataHeader {
 
 func (x *DownloadEntryDataResponse) GetChunk() *DataChunk {
 	if x != nil {
-		if x, ok := x.Payload.(*DownloadEntryDataResponse_Chunk); ok {
+		if x, ok := x.xxx_hidden_Payload.(*downloadEntryDataResponse_Chunk); ok {
 			return x.Chunk
 		}
 	}
 	return nil
 }
 
+func (x *DownloadEntryDataResponse) SetHeader(v *DownloadEntryDataHeader) {
+	if v == nil {
+		x.xxx_hidden_Payload = nil
+		return
+	}
+	x.xxx_hidden_Payload = &downloadEntryDataResponse_Header{v}
+}
+
+func (x *DownloadEntryDataResponse) SetChunk(v *DataChunk) {
+	if v == nil {
+		x.xxx_hidden_Payload = nil
+		return
+	}
+	x.xxx_hidden_Payload = &downloadEntryDataResponse_Chunk{v}
+}
+
+func (x *DownloadEntryDataResponse) HasPayload() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Payload != nil
+}
+
+func (x *DownloadEntryDataResponse) HasHeader() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Payload.(*downloadEntryDataResponse_Header)
+	return ok
+}
+
+func (x *DownloadEntryDataResponse) HasChunk() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Payload.(*downloadEntryDataResponse_Chunk)
+	return ok
+}
+
+func (x *DownloadEntryDataResponse) ClearPayload() {
+	x.xxx_hidden_Payload = nil
+}
+
+func (x *DownloadEntryDataResponse) ClearHeader() {
+	if _, ok := x.xxx_hidden_Payload.(*downloadEntryDataResponse_Header); ok {
+		x.xxx_hidden_Payload = nil
+	}
+}
+
+func (x *DownloadEntryDataResponse) ClearChunk() {
+	if _, ok := x.xxx_hidden_Payload.(*downloadEntryDataResponse_Chunk); ok {
+		x.xxx_hidden_Payload = nil
+	}
+}
+
+const DownloadEntryDataResponse_Payload_not_set_case case_DownloadEntryDataResponse_Payload = 0
+const DownloadEntryDataResponse_Header_case case_DownloadEntryDataResponse_Payload = 1
+const DownloadEntryDataResponse_Chunk_case case_DownloadEntryDataResponse_Payload = 2
+
+func (x *DownloadEntryDataResponse) WhichPayload() case_DownloadEntryDataResponse_Payload {
+	if x == nil {
+		return DownloadEntryDataResponse_Payload_not_set_case
+	}
+	switch x.xxx_hidden_Payload.(type) {
+	case *downloadEntryDataResponse_Header:
+		return DownloadEntryDataResponse_Header_case
+	case *downloadEntryDataResponse_Chunk:
+		return DownloadEntryDataResponse_Chunk_case
+	default:
+		return DownloadEntryDataResponse_Payload_not_set_case
+	}
+}
+
+type DownloadEntryDataResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// Fields of oneof xxx_hidden_Payload:
+	// header reports the total payload size.
+	Header *DownloadEntryDataHeader
+	// chunk is one piece of the entry payload.
+	Chunk *DataChunk
+	// -- end of xxx_hidden_Payload
+}
+
+func (b0 DownloadEntryDataResponse_builder) Build() *DownloadEntryDataResponse {
+	m0 := &DownloadEntryDataResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Header != nil {
+		x.xxx_hidden_Payload = &downloadEntryDataResponse_Header{b.Header}
+	}
+	if b.Chunk != nil {
+		x.xxx_hidden_Payload = &downloadEntryDataResponse_Chunk{b.Chunk}
+	}
+	return m0
+}
+
+type case_DownloadEntryDataResponse_Payload protoreflect.FieldNumber
+
+func (x case_DownloadEntryDataResponse_Payload) String() string {
+	md := file_gophkeeper_v1_service_proto_msgTypes[18].Descriptor()
+	if x == 0 {
+		return "not set"
+	}
+	return protoimpl.X.MessageFieldStringOf(md, protoreflect.FieldNumber(x))
+}
+
 type isDownloadEntryDataResponse_Payload interface {
 	isDownloadEntryDataResponse_Payload()
 }
 
-type DownloadEntryDataResponse_Header struct {
+type downloadEntryDataResponse_Header struct {
 	// header reports the total payload size.
 	Header *DownloadEntryDataHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
 }
 
-type DownloadEntryDataResponse_Chunk struct {
+type downloadEntryDataResponse_Chunk struct {
 	// chunk is one piece of the entry payload.
 	Chunk *DataChunk `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
 }
 
-func (*DownloadEntryDataResponse_Header) isDownloadEntryDataResponse_Payload() {}
+func (*downloadEntryDataResponse_Header) isDownloadEntryDataResponse_Payload() {}
 
-func (*DownloadEntryDataResponse_Chunk) isDownloadEntryDataResponse_Payload() {}
+func (*downloadEntryDataResponse_Chunk) isDownloadEntryDataResponse_Payload() {}
 
 // SyncRequest asks for the current state of all entries of the
 // authenticated user.
 type SyncRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// The user is identified by the JWT in request metadata.
-	// include_data controls whether entry payloads are carried in the
-	// response (see ListEntriesRequest.include_data). Default false:
-	// Sync returns metadata and data_size only, so it stays cheap even
-	// with large binary entries.
-	IncludeData   bool `protobuf:"varint,1,opt,name=include_data,json=includeData,proto3" json:"include_data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_IncludeData bool                   `protobuf:"varint,1,opt,name=include_data,json=includeData,proto3"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *SyncRequest) Reset() {
@@ -1053,26 +1564,43 @@ func (x *SyncRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SyncRequest.ProtoReflect.Descriptor instead.
-func (*SyncRequest) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{19}
-}
-
 func (x *SyncRequest) GetIncludeData() bool {
 	if x != nil {
-		return x.IncludeData
+		return x.xxx_hidden_IncludeData
 	}
 	return false
+}
+
+func (x *SyncRequest) SetIncludeData(v bool) {
+	x.xxx_hidden_IncludeData = v
+}
+
+type SyncRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// The user is identified by the JWT in request metadata.
+	// include_data controls whether entry payloads are carried in the
+	// response (see ListEntriesRequest.include_data). Default false:
+	// Sync returns metadata and data_size only, so it stays cheap even
+	// with large binary entries.
+	IncludeData bool
+}
+
+func (b0 SyncRequest_builder) Build() *SyncRequest {
+	m0 := &SyncRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_IncludeData = b.IncludeData
+	return m0
 }
 
 // SyncResponse carries the full current list of the user's entries,
 // so multiple authorized clients of the same owner stay in sync.
 type SyncResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// entries is the complete current set of the user's entries.
-	Entries       []*Entry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Entries *[]*Entry              `protobuf:"bytes,1,rep,name=entries,proto3"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *SyncResponse) Reset() {
@@ -1100,16 +1628,32 @@ func (x *SyncResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SyncResponse.ProtoReflect.Descriptor instead.
-func (*SyncResponse) Descriptor() ([]byte, []int) {
-	return file_gophkeeper_v1_service_proto_rawDescGZIP(), []int{20}
-}
-
 func (x *SyncResponse) GetEntries() []*Entry {
 	if x != nil {
-		return x.Entries
+		if x.xxx_hidden_Entries != nil {
+			return *x.xxx_hidden_Entries
+		}
 	}
 	return nil
+}
+
+func (x *SyncResponse) SetEntries(v []*Entry) {
+	x.xxx_hidden_Entries = &v
+}
+
+type SyncResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// entries is the complete current set of the user's entries.
+	Entries []*Entry
+}
+
+func (b0 SyncResponse_builder) Build() *SyncResponse {
+	m0 := &SyncResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Entries = &b.Entries
+	return m0
 }
 
 var File_gophkeeper_v1_service_proto protoreflect.FileDescriptor
@@ -1173,18 +1717,6 @@ const file_gophkeeper_v1_service_proto_rawDesc = "" +
 	"\x04Sync\x12\x1a.gophkeeper.v1.SyncRequest\x1a\x1b.gophkeeper.v1.SyncResponse\x12Q\n" +
 	"\x06Upload\x12!.gophkeeper.v1.UploadEntryRequest\x1a\".gophkeeper.v1.UploadEntryResponse(\x01\x12h\n" +
 	"\x11DownloadEntryData\x12'.gophkeeper.v1.DownloadEntryDataRequest\x1a(.gophkeeper.v1.DownloadEntryDataResponse0\x01BOZMgithub.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1b\x06proto3"
-
-var (
-	file_gophkeeper_v1_service_proto_rawDescOnce sync.Once
-	file_gophkeeper_v1_service_proto_rawDescData []byte
-)
-
-func file_gophkeeper_v1_service_proto_rawDescGZIP() []byte {
-	file_gophkeeper_v1_service_proto_rawDescOnce.Do(func() {
-		file_gophkeeper_v1_service_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_gophkeeper_v1_service_proto_rawDesc), len(file_gophkeeper_v1_service_proto_rawDesc)))
-	})
-	return file_gophkeeper_v1_service_proto_rawDescData
-}
 
 var file_gophkeeper_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_gophkeeper_v1_service_proto_goTypes = []any{
@@ -1256,13 +1788,13 @@ func file_gophkeeper_v1_service_proto_init() {
 	}
 	file_gophkeeper_v1_models_proto_init()
 	file_gophkeeper_v1_service_proto_msgTypes[13].OneofWrappers = []any{
-		(*UploadEntryRequest_Header)(nil),
-		(*UploadEntryRequest_Chunk)(nil),
-		(*UploadEntryRequest_Footer)(nil),
+		(*uploadEntryRequest_Header)(nil),
+		(*uploadEntryRequest_Chunk)(nil),
+		(*uploadEntryRequest_Footer)(nil),
 	}
 	file_gophkeeper_v1_service_proto_msgTypes[18].OneofWrappers = []any{
-		(*DownloadEntryDataResponse_Header)(nil),
-		(*DownloadEntryDataResponse_Chunk)(nil),
+		(*downloadEntryDataResponse_Header)(nil),
+		(*downloadEntryDataResponse_Chunk)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
