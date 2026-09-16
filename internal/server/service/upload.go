@@ -12,15 +12,18 @@ import (
 	"github.com/dmitriy/gophkeeper/internal/server/model"
 )
 
-// Upload limits and errors.
-var (
+// Upload limits.
+const (
 	// DefaultMaxDataSize is the maximum entry payload size accepted by
 	// an EntryService created without explicit limits (1 GiB).
 	DefaultMaxDataSize = int64(1 << 30)
 	// MaxChunkSize is the maximum size of a single upload chunk (1 MiB).
 	// A client sending larger chunks gets the upload rejected.
 	MaxChunkSize = 1 << 20
+)
 
+// Upload errors.
+var (
 	// ErrChunkTooLarge is returned when a single upload chunk exceeds
 	// MaxChunkSize.
 	ErrChunkTooLarge = errors.New("upload chunk is too large")
