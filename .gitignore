@@ -2,3 +2,7 @@ bin/
 coverage.out
 .idea/
 docs/superpowers/
+
+# TLS material: self-signed pair (gen-cert) and the autocert cache
+certs/
+certs-cache/
