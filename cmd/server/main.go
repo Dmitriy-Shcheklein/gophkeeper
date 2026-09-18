@@ -261,8 +261,6 @@ func (v *certFlagValues) Set(value string) error {
 	return nil
 }
 
-func (v *certFlagValues) values() []string { return *v }
-
 // newLogger creates the process logger with the given minimum level,
 // writing structured text to stderr.
 func newLogger(level slog.Level) *slog.Logger {
