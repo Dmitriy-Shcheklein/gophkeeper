@@ -1,0 +1,48 @@
+// auth.proto defines the authentication API of GophKeeper.
+syntax = "proto3";
+
+package gophkeeper.v1;
+
+import "gophkeeper/v1/models.proto";
+
+option go_package = "github.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1";
+
+// RegisterRequest carries credentials for creating a new account.
+message RegisterRequest {
+  // login is the desired unique login name.
+  string login = 1;
+  // password is the plaintext password; the server stores only a hash.
+  string password = 2;
+}
+
+// RegisterResponse returns the created user and an access token.
+message RegisterResponse {
+  // user is the newly created account.
+  User user = 1;
+  // access_token is a JWT to authenticate subsequent requests.
+  string access_token = 2;
+}
+
+// LoginRequest carries credentials for authenticating an existing account.
+message LoginRequest {
+  // login is the account login name.
+  string login = 1;
+  // password is the plaintext password to verify.
+  string password = 2;
+}
+
+// LoginResponse returns the authenticated user and an access token.
+message LoginResponse {
+  // user is the authenticated account.
+  User user = 1;
+  // access_token is a JWT to authenticate subsequent requests.
+  string access_token = 2;
+}
+
+// AuthService handles account registration and login.
+service AuthService {
+  // Register creates a new user account and returns an access token.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // Login verifies credentials and returns an access token.
+  rpc Login(LoginRequest) returns (LoginResponse);
+}

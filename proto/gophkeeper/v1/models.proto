@@ -1,0 +1,64 @@
+// models.proto contains shared message and enum definitions
+// used by GophKeeper services.
+syntax = "proto3";
+
+package gophkeeper.v1;
+
+option go_package = "github.com/dmitriy/gophkeeper/internal/common/proto/gophkeeperv1;gophkeeperv1";
+
+// EntryType enumerates the kinds of private data
+// an entry can hold.
+enum EntryType {
+  // ENTRY_TYPE_UNSPECIFIED is the zero value and must not be used explicitly.
+  ENTRY_TYPE_UNSPECIFIED = 0;
+  // ENTRY_TYPE_LOGIN_PASSWORD is a login/password credential pair.
+  ENTRY_TYPE_LOGIN_PASSWORD = 1;
+  // ENTRY_TYPE_TEXT is an arbitrary text note.
+  ENTRY_TYPE_TEXT = 2;
+  // ENTRY_TYPE_BINARY is arbitrary binary data (e.g. a file).
+  ENTRY_TYPE_BINARY = 3;
+  // ENTRY_TYPE_CARD is bank card data.
+  ENTRY_TYPE_CARD = 4;
+}
+
+// User represents a registered GophKeeper account.
+message User {
+  // id is the unique server-assigned user identifier.
+  string id = 1;
+  // login is the unique login name used for authentication.
+  string login = 2;
+  // created_at is the account creation timestamp, Unix seconds (UTC).
+  int64 created_at = 3;
+}
+
+// Entry is a single piece of the user's private data stored on the server.
+// The actual payload is carried in the data field as bytes; its meaning
+// is determined by type.
+message Entry {
+  // id is the unique server-assigned entry identifier.
+  string id = 1;
+  // type defines how the data field should be interpreted.
+  EntryType type = 2;
+  // label is a user-visible name of the entry.
+  string label = 3;
+  // metadata holds arbitrary text metadata supplied by the user.
+  string metadata = 4;
+  // data is the entry payload:
+  // LOGIN_PASSWORD — serialized credential pair,
+  // TEXT — UTF-8 text,
+  // BINARY — raw bytes,
+  // CARD — serialized card data.
+  bytes data = 5;
+  // version is incremented on every update and used for optimistic locking:
+  // update requests must carry the version they are based on.
+  int64 version = 6;
+  // created_at is the entry creation timestamp, Unix seconds (UTC).
+  int64 created_at = 7;
+  // updated_at is the last modification timestamp, Unix seconds (UTC).
+  int64 updated_at = 8;
+  // data_size is the server-reported size of the entry payload in bytes.
+  // It is populated even when data itself is omitted (see
+  // ListEntriesRequest.include_data and SyncRequest.include_data), so
+  // clients can show sizes and decide whether to download the content.
+  int64 data_size = 9;
+}
